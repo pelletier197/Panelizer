@@ -15,9 +15,9 @@ export function Viewport() {
     <Canvas
       frameloop="demand"
       camera={{ position: [1.2, 1, 1.6], fov: 45 }}
-      // In select mode the marquee owns selection (empty box clears it), so the
-      // stray missed-click that ends a drag mustn't also deselect.
-      onPointerMissed={() => dragMode === 'orbit' && select(null)}
+      // Click on empty space clears the selection. This is a click (not a drag),
+      // so a marquee box-drag never triggers it — the two don't collide.
+      onPointerMissed={() => select(null)}
     >
       <color attach="background" args={['#1a1c20']} />
       <ambientLight intensity={0.6} />
