@@ -96,4 +96,3 @@ heuristic — swappable for a tighter algorithm behind the same signature.
   Three.js). Fine for now; lazy-load / split if first-load matters.
   - **Shortcuts** add shortcuts to activate all tools
   **Print the cutlist** print the cutlist to pdf (best) or an image showing all dimensions of each panel, their name, etc.
-  **cutlist grain orientation** I think the default grain orientation for each panel may be wrong (unsure). The default grain orientation should put the longest side of the panel oriented towards the longest side of the sheet good. Possibly, would be nice to have a visualisation of how looks each piece (maybe on hover the grain list, shows a tooltip?). Would show what orientation it currently have. The too big for sheet is nice also, but would be nice if there was a visual queue of which one are missing in the list. 

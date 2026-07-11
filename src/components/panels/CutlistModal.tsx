@@ -75,6 +75,9 @@ export function CutlistModal() {
 
   const asideRef = useRef<HTMLElement>(null)
   const [controlsWidth, setControlsWidth] = useState(loadControlsWidth)
+  // Panels currently hovered — shared between the grain list and the cut
+  // diagrams so hovering either side highlights the matching parts.
+  const [hovered, setHovered] = useState<string[] | null>(null)
 
   useEffect(() => {
     try {
@@ -111,6 +114,15 @@ export function CutlistModal() {
   if (!open) return null
 
   const fmt = (mm: number) => formatMeasurement(mm, unit)
+  const isHovered = (ids: string[]) => hovered !== null && ids.some((id) => hovered.includes(id))
+  // Which panels didn't make it onto a sheet, and why — surfaced as a cue in
+  // the grain list so a part with no stock / too big is easy to spot.
+  const unplacedReason = new Map(result.unplaced.map((u) => [u.panelId, u.reason]))
+  const unplacedNote = (ids: string[]): string | null => {
+    const id = ids.find((x) => unplacedReason.has(x))
+    if (!id) return null
+    return unplacedReason.get(id) === 'too-big' ? 'Too big for the sheet' : 'No matching stock'
+  }
 
   // Parts that couldn't be placed only because their material + thickness has
   // no stock yet — grouped so we can offer a one-click "add the right sheet".
@@ -201,27 +213,45 @@ export function CutlistModal() {
                   </div>
                   <table className="parts__table grain-group__table">
                     <tbody>
-                      {group.rows.map((r, i) => (
-                        <tr key={i}>
-                          <td className="parts__name">{partNames(r.parts)}</td>
-                          <td>{r.quantity}×</td>
-                          <td>
-                            {fmt(r.length)} × {fmt(r.width)}
-                          </td>
-                          <td>
-                            <select
-                              value={grainOf(r.ids)}
-                              onChange={(e) => r.ids.forEach((id) => updatePanel(id, { grain: e.target.value as Grain }))}
-                            >
-                              {GRAINS.map((g) => (
-                                <option key={g.value} value={g.value}>
-                                  {g.label}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
+                      {group.rows.map((r, i) => {
+                        const note = unplacedNote(r.ids)
+                        return (
+                          <tr
+                            key={i}
+                            className={isHovered(r.ids) ? 'is-hover' : ''}
+                            onMouseEnter={() => setHovered(r.ids)}
+                            onMouseLeave={() => setHovered(null)}
+                          >
+                            <td>
+                              <GrainThumb length={r.length} width={r.width} grain={grainOf(r.ids)} />
+                            </td>
+                            <td className="parts__name">
+                              {partNames(r.parts)}
+                              {note && (
+                                <span className="grain-warn" title={note}>
+                                  ⚠
+                                </span>
+                              )}
+                            </td>
+                            <td>{r.quantity}×</td>
+                            <td>
+                              {fmt(r.length)} × {fmt(r.width)}
+                            </td>
+                            <td>
+                              <select
+                                value={grainOf(r.ids)}
+                                onChange={(e) => r.ids.forEach((id) => updatePanel(id, { grain: e.target.value as Grain }))}
+                              >
+                                {GRAINS.map((g) => (
+                                  <option key={g.value} value={g.value}>
+                                    {g.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -256,7 +286,15 @@ export function CutlistModal() {
                   </h3>
                   <div className="cut-group__sheets">
                     {g.sheets.map((s) => (
-                      <SheetSvg key={s.index} sheet={s} margin={margin} color={g.color} unit={unit} />
+                      <SheetSvg
+                        key={s.index}
+                        sheet={s}
+                        margin={margin}
+                        color={g.color}
+                        unit={unit}
+                        hovered={hovered}
+                        onHover={setHovered}
+                      />
                     ))}
                   </div>
                 </section>
@@ -300,8 +338,24 @@ export function CutlistModal() {
   )
 }
 
-/** One sheet drawn to scale, with its parts, kerf gaps, and margin border. */
-function SheetSvg({ sheet, margin, color, unit }: { sheet: SheetLayout; margin: number; color: string; unit: import('../../lib/units').Unit }) {
+/** One sheet drawn to scale, with its parts, kerf gaps, and margin border.
+ *  Parts highlight on hover (and cross-highlight the grain list) and carry a
+ *  native tooltip so even the small ones can be identified. */
+function SheetSvg({
+  sheet,
+  margin,
+  color,
+  unit,
+  hovered,
+  onHover,
+}: {
+  sheet: SheetLayout
+  margin: number
+  color: string
+  unit: import('../../lib/units').Unit
+  hovered: string[] | null
+  onHover: (ids: string[] | null) => void
+}) {
   const scale = SHEET_MAX_PX / sheet.length
   const W = sheet.length * scale
   const H = sheet.width * scale
@@ -323,9 +377,26 @@ function SheetSvg({ sheet, margin, color, unit }: { sheet: SheetLayout; margin: 
           const py = p.y * scale
           const pw = p.w * scale
           const ph = p.h * scale
+          const isHot = hovered?.includes(p.panelId)
           return (
-            <g key={p.panelId}>
-              <rect x={px} y={py} width={pw} height={ph} fill={color} className="sheet__part" />
+            <g
+              key={p.panelId}
+              onMouseEnter={() => onHover([p.panelId])}
+              onMouseLeave={() => onHover(null)}
+            >
+              <rect
+                x={px}
+                y={py}
+                width={pw}
+                height={ph}
+                fill={color}
+                className={isHot ? 'sheet__part sheet__part--hover' : 'sheet__part'}
+              >
+                <title>
+                  {p.name} · {label(p.w)} × {label(p.h)}
+                  {p.rotated ? ' (rotated)' : ''}
+                </title>
+              </rect>
               {pw > 34 && ph > 16 && (
                 <text x={px + pw / 2} y={py + ph / 2} className="sheet__label">
                   {p.name}
@@ -339,5 +410,46 @@ function SheetSvg({ sheet, margin, color, unit }: { sheet: SheetLayout; margin: 
         Sheet {sheet.index} · {label(sheet.length)} × {label(sheet.width)}
       </figcaption>
     </figure>
+  )
+}
+
+/** A tiny orientation preview: the part drawn length-horizontal, with grain
+ *  lines showing which edge the grain runs along (free parts show a ↻). */
+function GrainThumb({ length, width, grain }: { length: number; width: number; grain: Grain }) {
+  const BOX_W = 36
+  const BOX_H = 24
+  const pad = 3
+  const s = Math.min((BOX_W - 2 * pad) / length, (BOX_H - 2 * pad) / width)
+  const w = Math.max(4, length * s)
+  const h = Math.max(4, width * s)
+  const x = (BOX_W - w) / 2
+  const y = (BOX_H - h) / 2
+
+  const lines = []
+  const n = 3
+  if (grain === 'length') {
+    for (let i = 1; i <= n; i++) {
+      const yy = y + (h * i) / (n + 1)
+      lines.push(<line key={i} x1={x + 2} y1={yy} x2={x + w - 2} y2={yy} />)
+    }
+  } else if (grain === 'width') {
+    for (let i = 1; i <= n; i++) {
+      const xx = x + (w * i) / (n + 1)
+      lines.push(<line key={i} x1={xx} y1={y + 2} x2={xx} y2={y + h - 2} />)
+    }
+  }
+
+  const title = grain === 'none' ? 'Free (no grain)' : `Grain along ${grain}`
+  return (
+    <svg className="grain-thumb" width={BOX_W} height={BOX_H} aria-hidden>
+      <title>{title}</title>
+      <rect x={x} y={y} width={w} height={h} rx={1.5} />
+      {lines}
+      {grain === 'none' && (
+        <text x={BOX_W / 2} y={BOX_H / 2 + 3.5} textAnchor="middle" className="grain-thumb__free">
+          ↻
+        </text>
+      )}
+    </svg>
   )
 }

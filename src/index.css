@@ -746,6 +746,42 @@ select:focus {
   vertical-align: middle;
 }
 
+.grain-group__table tr {
+  cursor: default;
+  border-radius: 4px;
+}
+
+.grain-group__table tr.is-hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* Orientation preview swatch in the grain list. */
+.grain-thumb {
+  display: block;
+}
+
+.grain-thumb rect {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: var(--text-dim);
+  stroke-width: 1;
+}
+
+.grain-thumb line {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+}
+
+.grain-thumb__free {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+.grain-warn {
+  margin-left: 5px;
+  color: var(--danger);
+  cursor: help;
+}
+
 .parts__name {
   max-width: 120px;
   overflow: hidden;
@@ -818,6 +854,13 @@ select:focus {
   stroke: rgba(0, 0, 0, 0.55);
   stroke-width: 1;
   fill-opacity: 0.85;
+  cursor: default;
+}
+
+.sheet__part--hover {
+  stroke: #fff;
+  stroke-width: 2.5;
+  fill-opacity: 1;
 }
 
 .sheet__label {
