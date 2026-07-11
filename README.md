@@ -78,16 +78,18 @@ diagram with waste per material. **Grain** is per part (default: the longer
 edge); a grained part stays grain-parallel to the sheet, a grain-free part may
 rotate 90° for a tighter pack. Parts whose material + thickness has no stock are
 surfaced under **Missing stock** with a one-click *Add sheet* that pre-fills the
-right material and thickness. The packer (`lib/nesting.ts`) is a pure shelf/strip
-heuristic — swappable for a tighter algorithm behind the same signature.
+right material and thickness. All matching stock sizes are used (not just the
+first): parts fill open sheets, and a new sheet is the smallest stock that fits,
+so offcuts/small sheets go first and waste drops. Stock **quantities** are
+honoured — the packer never invents sheets; parts that then don't fit are
+reported as *Not enough stock*. The per-sheet packer (`lib/nesting.ts`) is a
+pure shelf/strip heuristic — swappable for a tighter algorithm behind the same
+signature.
 
 ### Ideas for later
 
 - **Tighter nesting.** The current packer is a first-fit shelf heuristic. A
   guillotine / maxrects pass would cut waste, especially with mixed sizes.
-- **Multiple stock sizes per material+thickness**, offcut reuse, and honouring
-  stock quantity during packing (today the first matching stock size is used
-  and quantity is only flagged when exceeded).
 - **Rotation.** Add a real rotation to `Panel` (beyond the discrete
   thickness-axis) plus a rotate gizmo, with **snapping like move and resize**
   (snap to common angles / neighbour orientations). Cut dimensions are

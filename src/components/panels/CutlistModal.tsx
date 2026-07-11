@@ -121,7 +121,10 @@ export function CutlistModal() {
   const unplacedNote = (ids: string[]): string | null => {
     const id = ids.find((x) => unplacedReason.has(x))
     if (!id) return null
-    return unplacedReason.get(id) === 'too-big' ? 'Too big for the sheet' : 'No matching stock'
+    const reason = unplacedReason.get(id)
+    if (reason === 'too-big') return 'Too big for the sheet'
+    if (reason === 'no-space') return 'Not enough stock to fit it'
+    return 'No matching stock'
   }
 
   // Parts that couldn't be placed only because their material + thickness has
@@ -139,6 +142,7 @@ export function CutlistModal() {
       .values(),
   ]
   const tooBig = result.unplaced.filter((u) => u.reason === 'too-big')
+  const noSpace = result.unplaced.filter((u) => u.reason === 'no-space')
 
   return (
     <div className="cutlist-overlay" onClick={() => setOpen(false)}>
@@ -279,16 +283,20 @@ export function CutlistModal() {
             )}
 
             {result.groups.map((g) => {
-              const sheetArea = g.sheetLength * g.sheetWidth
+              // Sheets in a group can differ in size; waste is over their actual
+              // areas, and all are drawn to one scale (the group's biggest sheet)
+              // so relative sizes read true.
+              const sheetAreaSum = g.sheets.reduce((sum, s) => sum + s.length * s.width, 0)
               const used = g.sheets.reduce((sum, s) => sum + s.usedArea, 0)
-              const waste = g.sheets.length ? Math.round((1 - used / (g.sheets.length * sheetArea)) * 100) : 0
+              const waste = sheetAreaSum ? Math.round((1 - used / sheetAreaSum) * 100) : 0
+              const maxLength = Math.max(...g.sheets.map((s) => s.length))
+              const scale = SHEET_MAX_PX / maxLength
               return (
                 <section className="cut-group" key={g.key}>
                   <h3>
                     <span className="parts__swatch" style={{ background: g.color }} /> {g.materialName} · {fmt(g.thickness)}
                     <span className="cut-group__stats">
                       {g.sheets.length} sheet{g.sheets.length === 1 ? '' : 's'} · {waste}% waste
-                      {g.short && <span className="cut-group__short"> · exceeds stock qty ({g.quantity})</span>}
                     </span>
                   </h3>
                   <div className="cut-group__sheets">
@@ -296,6 +304,7 @@ export function CutlistModal() {
                       <SheetSvg
                         key={s.index}
                         sheet={s}
+                        scale={scale}
                         margin={margin}
                         color={g.color}
                         unit={unit}
@@ -338,6 +347,22 @@ export function CutlistModal() {
                 </ul>
               </section>
             )}
+
+            {noSpace.length > 0 && (
+              <section className="cut-group cut-group--unplaced">
+                <h3>Not enough stock</h3>
+                <p className="cutlist-view__hint">
+                  These parts fit, but the available sheet quantity ran out — raise a quantity or add more sheets:
+                </p>
+                <ul>
+                  {noSpace.map((u) => (
+                    <li key={u.panelId}>
+                      {u.name} — {u.materialName} · {fmt(u.thickness)}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </main>
         </div>
       </div>
@@ -350,6 +375,7 @@ export function CutlistModal() {
  *  native tooltip so even the small ones can be identified. */
 function SheetSvg({
   sheet,
+  scale,
   margin,
   color,
   unit,
@@ -357,13 +383,13 @@ function SheetSvg({
   onHover,
 }: {
   sheet: SheetLayout
+  scale: number
   margin: number
   color: string
   unit: import('../../lib/units').Unit
   hovered: string[] | null
   onHover: (ids: string[] | null) => void
 }) {
-  const scale = SHEET_MAX_PX / sheet.length
   const W = sheet.length * scale
   const H = sheet.width * scale
   const label = (mm: number) => formatMeasurement(mm, unit)
