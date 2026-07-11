@@ -435,6 +435,23 @@ function SheetSvg({
                   {p.name}
                 </text>
               )}
+              {isHot && (
+                <>
+                  {/* Size on the sheet: width along the top, height down the left. */}
+                  <text x={px + pw / 2} y={py + 11} textAnchor="middle" className="sheet__dim">
+                    {label(p.w)}
+                  </text>
+                  <text
+                    x={px + 11}
+                    y={py + ph / 2}
+                    textAnchor="middle"
+                    transform={`rotate(-90 ${px + 11} ${py + ph / 2})`}
+                    className="sheet__dim"
+                  >
+                    {label(p.h)}
+                  </text>
+                </>
+              )}
             </g>
           )
         })}

@@ -863,9 +863,28 @@ select:focus {
   fill-opacity: 1;
 }
 
+/* On-piece dimension labels shown while a part is hovered. A thin dark halo
+ * keeps them legible over the fill without muddying the glyphs. */
+.sheet__dim {
+  fill: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 1.2px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .sheet__label {
   fill: #1a1200;
+  font-family: inherit;
   font-size: 9px;
+  font-weight: 600;
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;

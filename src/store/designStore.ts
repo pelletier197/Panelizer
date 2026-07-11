@@ -118,6 +118,11 @@ interface DesignState {
   /** Commit a group move as a single undo step. */
   commitPanelsMove: (moves: { id: string; position: [number, number, number] }[]) => void
   resizePanelLive: (id: string, patch: Partial<Panel>) => void
+  /** Revert a deferred gesture: apply the given patches (the panels' pre-gesture
+   *  fields) and drop the pending drag snapshot, WITHOUT touching undo history —
+   *  nothing was committed, so this leaves the saved state untouched. Used when
+   *  a move/resize typed-entry box is cancelled with Escape. */
+  restorePanels: (restore: { id: string; patch: Partial<Panel> }[]) => void
   removePanel: (id: string) => void
   /** Remove several panels in one undo step (multi-selection delete). */
   removePanels: (ids: string[]) => void
@@ -283,6 +288,14 @@ export const useDesignStore = create<DesignState>((set, get) => {
     // same non-autosaved pattern as movePanelLive.
     resizePanelLive: (id, patch) => {
       live(get().panels.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    },
+
+    restorePanels: (restore) => {
+      const byId = new Map(restore.map((r) => [r.id, r.patch]))
+      set({
+        panels: get().panels.map((p) => (byId.has(p.id) ? { ...p, ...byId.get(p.id)! } : p)),
+        dragOrigin: null,
+      })
     },
 
     removePanel: (id) => {
