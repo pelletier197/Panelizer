@@ -51,6 +51,7 @@ export function Toolbar() {
   }
 
   return (
+    <>
     <header className="toolbar">
       <div className="toolbar__brand">Wood3D</div>
 
@@ -124,8 +125,6 @@ export function Toolbar() {
         })}
       </div>
 
-      <ToolHint />
-
       <div className="toolbar__spacer" />
 
       <Menu label="☰" ariaLabel="Document menu" align="right">
@@ -194,5 +193,7 @@ export function Toolbar() {
         }}
       />
     </header>
+    <ToolHint />
+    </>
   )
 }

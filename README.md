@@ -45,51 +45,46 @@ src/
   types/panel.ts          Panel domain type
   lib/
     materials.ts          Sheet-good materials (name, thickness, colour)
-    geometry.ts           mm to m scale + panel -> world-box-size mapping
+    geometry.ts           mm to m scale + panel <-> world-axis mapping
     panel.ts              createPanel() factory with defaults
+    units.ts              Parse / format lengths (mm / cm / inch fractions)
+    corners.ts            The 8 corner points of a panel; distance helper
+    snapping.ts           Magnetic move-snap + resize-face edge snap
+    overlaps.ts           Where two panels interpenetrate (joint markers)
+    resize.ts             Single-face resize math (opposite face fixed)
     cutlist.ts            Derive & group the cutlist; CSV export
     persistence.ts        Serialize / parse / download / autosave
-  store/designStore.ts    Zustand store — the single source of truth
+  store/designStore.ts    Zustand store — single source of truth + undo/redo
   components/
-    viewport/             R3F canvas, scene, per-panel mesh + move gizmo
+    viewport/             R3F canvas, scene, per-panel mesh, move/resize gizmos,
+                          corner-tool overlay, overlap highlights
     panels/               Toolbar, properties editor, cutlist table
-    ui/                    Reusable form controls
+    layout/               Resizable sidebar, tool hint banner
+    ui/                    Reusable form controls (unit-aware input, menu)
 ```
 
 ## Status
 
-**Phase 1 — core loop (done).** Add / select / move / resize / delete panels,
-edit properties, live cutlist, JSON export & import, localStorage autosave.
-Customizable materials (name + colour; thickness is per-panel) — panels
-reference a material, the cutlist groups by it.
-
-**Phase 2 — assembly-aware (in progress).** Helping panels fit together while
-keeping the rule that **the size you set is the size you cut** — panels are
-never auto-resized.
-
-1. **Snapping (done).** Dragging a panel magnetically aligns it to its
-   neighbours' faces, edges, and centres, and butts panels together
-   (`lib/snapping.ts`). Alignment logic is pure and unit-testable.
-2. **Overlap highlights (done).** Panels keep their drawn size in 3D; wherever
-   two panels share space, a translucent teal marker shows the joint region
-   (`lib/overlaps.ts`), tracking panels live as they drag. Purely referential —
-   it flags where a joint lives (butt by default; a miter/dovetail is the
-   builder's choice). The cutlist always reports the drawn size.
-3. **Viewport tools (done).** A tool switch in the toolbar (`Move` / `Snap
-   point` / `Measure`). Snap-point picks a corner on one panel then a corner on
-   another and translates the first so they coincide. Measure picks two corners
-   and shows a line + distance label. Corners come from the pure `lib/corners.ts`.
+Core loop and the assembly-aware tools are shipped, all under the rule that
+**the size you set is the size you cut** — panels are never auto-resized.
 
 ### Ideas for later
 
-- **Panel rotation**: add a real rotation to `Panel` (beyond the discrete
-  thickness-axis) plus a rotate gizmo. Cut dimensions are unaffected. To avoid
-  reworking the axis-aligned assumptions, rotated panels opt out of magnetic
-  snapping and joint auto-capture (they use their as-drawn size).
-- **Drag-to-resize handles**: resize a panel's length/width by dragging faces in
-  the 3D view (today resizing is via the numeric fields). Thickness stays locked.
-- **Point-to-point resize**: pick an edge/face of a panel then a target point,
-  and resize that dimension so the panel fits between the two (e.g. make a shelf
-  span an opening). Corner-tool cousin of drag-resize; thickness stays locked.
-- **Bundle code-splitting**: the build is a single ~1.16 MB chunk (mostly
+- **Stock nesting → cut diagram (the main goal).** Given the project's parts
+  and the stock sheets available (sheet size, quantity, maybe grain/kerf), pack
+  the parts onto sheets and produce an actual **cutlist** — a diagram showing
+  how to lay out and cut each sheet, with offcuts. This is the core deliverable
+  of the project; everything else feeds it.
+- **Rename "Cutlist" panel → "Parts".** Today's Cutlist panel really lists the
+  project's components. Rename it **Parts** so the word "Cutlist" is free for
+  the stock-nesting diagram above. Standard woodworking/CAD term (part list /
+  BOM).
+- **Rotation.** Add a real rotation to `Panel` (beyond the discrete
+  thickness-axis) plus a rotate gizmo, with **snapping like move and resize**
+  (snap to common angles / neighbour orientations). Cut dimensions are
+  unaffected.
+- **Slim down the Materials panel.** It takes up too much space and pulls
+  attention. Put a material's name and colour on a **single row**, with the
+  colour as a small **dropdown/swatch picker** rather than an inline palette.
+- **Bundle code-splitting.** The build is a single ~1.18 MB chunk (mostly
   Three.js). Fine for now; lazy-load / split if first-load matters.

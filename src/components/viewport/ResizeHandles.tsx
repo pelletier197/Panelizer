@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
-import { Html } from '@react-three/drei'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, axisField, panelBoxSize } from '../../lib/geometry'
 import { resizeAlongAxis } from '../../lib/resize'
 import { SNAP_THRESHOLD_MM, snapResizeFace } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
-import { MeasurementInput } from '../ui/MeasurementInput'
 
 type Axis3 = 0 | 1 | 2
 type FaceSign = 1 | -1
 
-/** A gesture that moves the face less than this (mm) is treated as a click,
- *  not a drag: it opens the numeric popup instead of committing a resize. */
+/** A gesture moving the face less than this (mm) is a click, not a drag — no
+ *  resize is committed. */
 const CLICK_THRESHOLD_MM = 0.5
 /** How far (mm) the grab handle floats outside its face. */
 const HANDLE_OFFSET_MM = 40
@@ -48,15 +46,13 @@ interface DragStart {
 /**
  * One grab handle floating off a resizable face. Drag it along the face
  * normal to resize that dimension with the opposite face held fixed
- * (Alt = symmetric, both faces move and the centre stays put). A plain click
- * (no real drag) opens an inline field to type an exact size.
+ * (Alt = symmetric, both faces move and the centre stays put).
  *
  * OrbitControls listens on the canvas element directly, so `stopPropagation`
  * can't keep it from also handling the drag — instead we disable it while the
  * pointer is over a handle and restore it when the pointer leaves.
  */
 function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; faceSign: FaceSign }) {
-  const unit = useDesignStore((s) => s.unit)
   const updatePanel = useDesignStore((s) => s.updatePanel)
   const resizePanelLive = useDesignStore((s) => s.resizePanelLive)
   const setOrbit = useDesignStore((s) => s.setOrbitEnabled)
@@ -67,13 +63,11 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
 
   const drag = useRef<DragStart | null>(null)
   const [hovered, setHovered] = useState(false)
-  const [editing, setEditing] = useState(false)
 
   // Safety net: if this handle unmounts mid-gesture (tool switch, deselect),
   // make sure orbit is turned back on.
   useEffect(() => () => setOrbit(true), [setOrbit])
 
-  const field = axisField(panel.normal, axis) as 'length' | 'width'
   const faceCenter = faceCenterMm(panel, axis, faceSign)
   const handleCenter: [number, number, number] = [...faceCenter]
   handleCenter[axis] += faceSign * HANDLE_OFFSET_MM
@@ -133,9 +127,7 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     e.stopPropagation()
     ;(e.target as Element).releasePointerCapture(e.pointerId)
     const deltaMm = displacementMm(e.ray)
-    if (Math.abs(deltaMm) < CLICK_THRESHOLD_MM) {
-      setEditing(true)
-    } else {
+    if (Math.abs(deltaMm) >= CLICK_THRESHOLD_MM) {
       applyDisplacement(deltaMm, e.nativeEvent.altKey, true)
       armSelectSuppression() // don't let the drag-release click select a panel
     }
@@ -175,25 +167,6 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
           <sphereGeometry args={[HANDLE_RADIUS_M, 16, 16]} />
           <meshBasicMaterial color={hovered ? '#ffab5e' : '#ff8a2a'} depthTest={false} />
         </mesh>
-        {editing && (
-          <Html center>
-            <div className="resize-popup">
-              <MeasurementInput
-                label={field === 'length' ? 'Length' : 'Width'}
-                value={panel[field]}
-                defaultUnit={unit}
-                min={1}
-                onChange={(mm) => {
-                  const size = panelBoxSize(panel)[axis]
-                  drag.current = { panel, p0: new Vector3(), param0: 0 }
-                  applyDisplacement((mm - size) * faceSign, false, true)
-                  drag.current = null
-                  setEditing(false)
-                }}
-              />
-            </div>
-          </Html>
-        )}
       </group>
     </>
   )

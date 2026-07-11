@@ -15,7 +15,7 @@ export function ToolHint() {
       case 'measure':
         return pick ? 'Click the other corner to measure' : 'Click the first corner'
       case 'resize':
-        return 'Drag a face to resize · Alt = both sides · Click a face to type a size'
+        return 'Drag a face to resize · Alt = both sides'
     }
   })()
 
