@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildParts, partsToCsv } from '../../lib/parts'
+import { buildParts, partNames, partsToCsv } from '../../lib/parts'
 import { formatMeasurement, UNIT_SUFFIX } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 
@@ -40,6 +40,7 @@ export function PartsPanel() {
           <thead>
             <tr>
               <th>Qty</th>
+              <th>Part</th>
               <th>Length</th>
               <th>Width</th>
               <th>Thick.</th>
@@ -55,6 +56,7 @@ export function PartsPanel() {
                 title={r.quantity > 1 ? 'Click to cycle through matching panels' : 'Click to select'}
               >
                 <td>{r.quantity}</td>
+                <td className="parts__name">{partNames(r.parts)}</td>
                 <td>{fmt(r.length)}</td>
                 <td>{fmt(r.width)}</td>
                 <td>{fmt(r.thickness)}</td>

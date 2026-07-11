@@ -52,14 +52,21 @@ export function buildParts(panels: Panel[], materials: Material[]): PartRow[] {
   )
 }
 
+/** The distinct panel names in a row, joined for display. Usually one name
+ *  ("Side"); several show when differently-named panels share a size. */
+export function partNames(names: string[]): string {
+  return [...new Set(names)].join(', ')
+}
+
 /** Render the parts list as CSV text (dimensions in `unit`), ready to paste
  *  into a spreadsheet. Inch fractions are quoted so the "/" survives the CSV. */
 export function partsToCsv(rows: PartRow[], unit: Unit): string {
   const u = UNIT_SUFFIX[unit]
-  const header = ['Qty', `Length (${u})`, `Width (${u})`, `Thickness (${u})`, 'Material']
+  const header = ['Qty', 'Part', `Length (${u})`, `Width (${u})`, `Thickness (${u})`, 'Material']
   const lines = rows.map((r) =>
     [
       r.quantity,
+      `"${partNames(r.parts)}"`,
       `"${formatMeasurement(r.length, unit)}"`,
       `"${formatMeasurement(r.width, unit)}"`,
       `"${formatMeasurement(r.thickness, unit)}"`,

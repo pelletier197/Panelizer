@@ -94,3 +94,7 @@ heuristic — swappable for a tighter algorithm behind the same signature.
   unaffected.
 - **Bundle code-splitting.** The build is a single ~1.18 MB chunk (mostly
   Three.js). Fine for now; lazy-load / split if first-load matters.
+  - **Shortcuts** add shortcuts to activate all tools
+  - **Math in input** inputs should support doing math operations and display the result. Let's say I wanted to increase the width by 3, I could do `width: 30`, click the input, and do `+3`. Result shows 33. Addition is performed in the unit of the box, unless specified otherwise. `width: 30mm`, if I do `+3 in`, it outputs 30mm + 3 in in mm (keep the box unit).
+  **Print the cutlist** print the cutlist to pdf (best) or an image showing all dimensions of each panel, their name, etc.
+  **cutlist grain orientation** I think the default grain orientation for each panel may be wrong (unsure). The default grain orientation should put the longest side of the panel oriented towards the longest side of the sheet good. Possibly, would be nice to have a visualisation of how looks each piece (maybe on hover the grain list, shows a tooltip?). Would show what orientation it currently have. The too big for sheet is nice also, but would be nice if there was a visual queue of which one are missing in the list. 

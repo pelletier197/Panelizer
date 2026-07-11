@@ -6,6 +6,7 @@ import { PartsPanel } from './components/panels/PartsPanel'
 import { CutlistModal } from './components/panels/CutlistModal'
 import { Viewport } from './components/viewport/Viewport'
 import { ViewportControls } from './components/viewport/ViewportControls'
+import { GestureReadout } from './components/viewport/GestureReadout'
 import { ResizableSidebar } from './components/layout/ResizableSidebar'
 import { useDesignStore } from './store/designStore'
 
@@ -45,6 +46,7 @@ export default function App() {
         <div className="workspace__viewport">
           <Viewport />
           <ViewportControls />
+          <GestureReadout />
         </div>
         <ResizableSidebar>
           <PropertiesPanel />

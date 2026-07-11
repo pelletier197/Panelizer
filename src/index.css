@@ -150,6 +150,57 @@ select:focus {
   pointer-events: none;
 }
 
+/* Corner readout HUD for the live move/resize delta. Sits out of the main view
+ * in the viewport's bottom-left, and only appears during/after a gesture. */
+.gesture-readout {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.4);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.gesture-readout__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.gesture-readout__value {
+  min-width: 56px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+
+.gesture-readout input {
+  width: 80px;
+  padding: 3px 6px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.gesture-readout__unit {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ---- Menus (dropdowns) -------------------------------------------------- */
 
 .menu {
@@ -420,8 +471,8 @@ select:focus {
 /* ---- Stock -------------------------------------------------------------- */
 
 .stock {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
@@ -433,6 +484,32 @@ select:focus {
 
 .stock__row select {
   flex: 1;
+  min-width: 0;
+}
+
+/* Two-up compact grid for a sheet's dimensions (labels stack over inputs). */
+.stock__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+/* Scoped above the generic controls `.field` margin so grid spacing comes from
+ * the grid gap alone (no double gap). */
+.cutlist-view__controls .stock__grid .field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  margin: 0;
+}
+
+.stock__grid .field__label {
+  flex: none;
+  font-size: 11px;
+}
+
+.stock__grid .field__control input {
+  width: 100%;
   min-width: 0;
 }
 
@@ -568,8 +645,8 @@ select:focus {
 
 .cutlist-view {
   margin: auto;
-  width: min(1100px, 100%);
-  height: min(90vh, 100%);
+  width: min(1400px, 100%);
+  height: min(94vh, 100%);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -605,7 +682,6 @@ select:focus {
 
 .cutlist-view__controls {
   flex: none;
-  width: 280px;
   padding: 16px;
   overflow-y: auto;
   border-right: 1px solid var(--border);
@@ -615,10 +691,66 @@ select:focus {
   margin-top: 0;
 }
 
+/* A touch more breathing room in the dense controls panel. */
+.cutlist-view__controls .field-group {
+  margin-top: 24px;
+}
+
+.cutlist-view__controls .field {
+  margin-bottom: 10px;
+}
+
 .cutlist-view__result {
   flex: 1;
+  min-width: 0;
   padding: 16px;
   overflow-y: auto;
+}
+
+/* Drag handle between the controls panel and the cut diagrams. */
+.cutlist-resizer {
+  flex: 0 0 6px;
+  margin: 0 -3px; /* straddle the border so the seam stays thin */
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s;
+}
+
+.cutlist-resizer:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Grain editor grouped by material + thickness, part names shown. */
+.grain-group {
+  margin-top: 18px;
+}
+
+.grain-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.grain-group__table {
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.grain-group__table td {
+  padding: 2px 8px 2px 0;
+  vertical-align: middle;
+}
+
+.parts__name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cutlist-view__hint {

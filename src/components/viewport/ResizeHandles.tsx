@@ -55,13 +55,20 @@ interface DragStart {
 function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; faceSign: FaceSign }) {
   const updatePanel = useDesignStore((s) => s.updatePanel)
   const resizePanelLive = useDesignStore((s) => s.resizePanelLive)
+  const restorePanels = useDesignStore((s) => s.restorePanels)
   const setOrbit = useDesignStore((s) => s.setOrbitEnabled)
   const armSelectSuppression = useDesignStore((s) => s.armSelectSuppression)
+  const startGesture = useDesignStore((s) => s.startGesture)
+  const setGestureDelta = useDesignStore((s) => s.setGestureDelta)
+  const setGestureEditable = useDesignStore((s) => s.setGestureEditable)
+  const clearGesture = useDesignStore((s) => s.clearGesture)
   const panels = useDesignStore((s) => s.panels)
   const others = panels.filter((p) => p.id !== panel.id)
   const invalidate = useThree((s) => s.invalidate)
 
   const drag = useRef<DragStart | null>(null)
+  const gestureOpen = useRef(false)
+  const lastDelta = useRef(0)
   const [hovered, setHovered] = useState(false)
 
   // Safety net: if this handle unmounts mid-gesture (tool switch, deselect),
@@ -96,10 +103,11 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     return snapResizeFace(drag.current.panel, axis, faceSign, raw, others, SNAP_THRESHOLD_MM)
   }
 
-  // Resize from the frozen start state by the given axis displacement (mm).
-  const applyDisplacement = (deltaMm: number, symmetric: boolean, commit: boolean) => {
-    if (!drag.current) return
-    const result = resizeAlongAxis(drag.current.panel, axis, faceSign, deltaMm, symmetric)
+  const label = axisField(panel.normal, axis) === 'length' ? 'Length' : 'Width'
+
+  // Resize from a frozen start panel by the given axis displacement (mm).
+  const applyFrom = (startPanel: Panel, deltaMm: number, symmetric: boolean, commit: boolean) => {
+    const result = resizeAlongAxis(startPanel, axis, faceSign, deltaMm, symmetric)
     if (!result) return
     const patch = commit
       ? { [result.field]: Math.round(result.value), position: result.position.map(Math.round) as [number, number, number] }
@@ -107,10 +115,37 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     ;(commit ? updatePanel : resizePanelLive)(panel.id, patch)
   }
 
+  // Open the corner readout for this resize: apply/commit/cancel all work from
+  // the frozen start panel captured at pointer-down.
+  const openGesture = (startPanel: Panel, symmetric: boolean) => {
+    startGesture({
+      kind: 'resize',
+      label,
+      delta: 0,
+      editable: false,
+      apply: (mm) => {
+        lastDelta.current = mm
+        applyFrom(startPanel, mm, symmetric, false)
+      },
+      commit: () => {
+        applyFrom(startPanel, lastDelta.current, symmetric, true)
+        clearGesture()
+      },
+      cancel: () => {
+        const original = resizeAlongAxis(startPanel, axis, faceSign, 0, symmetric)
+        if (original) {
+          restorePanels([{ id: panel.id, patch: { [original.field]: original.value, position: original.position } }])
+        }
+        clearGesture()
+      },
+    })
+  }
+
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture(e.pointerId)
     setOrbit(false)
+    gestureOpen.current = false
     const p0 = new Vector3(...toM(faceCenter))
     drag.current = { panel, p0, param0: axisParam(e.ray, p0) }
   }
@@ -118,21 +153,32 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (!drag.current) return
     e.stopPropagation()
-    applyDisplacement(displacementMm(e.ray), e.nativeEvent.altKey, false)
+    const deltaMm = displacementMm(e.ray)
+    lastDelta.current = deltaMm
+    applyFrom(drag.current.panel, deltaMm, e.nativeEvent.altKey, false)
+    if (!gestureOpen.current) {
+      openGesture(drag.current.panel, e.nativeEvent.altKey)
+      gestureOpen.current = true
+    }
+    setGestureDelta(deltaMm)
     invalidate()
   }
 
+  // Drag released: a real resize leaves the readout open to type into (commit
+  // deferred); a click (barely moved) changes nothing.
   const endDrag = (e: ThreeEvent<PointerEvent>) => {
     if (!drag.current) return
     e.stopPropagation()
     ;(e.target as Element).releasePointerCapture(e.pointerId)
     const deltaMm = displacementMm(e.ray)
-    if (Math.abs(deltaMm) >= CLICK_THRESHOLD_MM) {
-      applyDisplacement(deltaMm, e.nativeEvent.altKey, true)
-      armSelectSuppression() // don't let the drag-release click select a panel
-    }
     drag.current = null
     setOrbit(true)
+    if (Math.abs(deltaMm) >= CLICK_THRESHOLD_MM) {
+      armSelectSuppression() // don't let the drag-release click select a panel
+      setGestureEditable() // keep the readout open, now typeable
+    } else {
+      clearGesture()
+    }
   }
 
   return (

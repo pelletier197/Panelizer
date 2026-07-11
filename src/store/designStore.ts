@@ -16,6 +16,23 @@ export type Tool = 'move' | 'move-snap' | 'resize' | 'measure'
 
 type Point = [number, number, number]
 
+/**
+ * A live move/resize gesture, surfaced in the corner readout HUD. While the
+ * pointer drags, `delta` is updated every frame (`editable: false`, read-only
+ * display). On release the readout becomes `editable` so an exact amount can be
+ * typed. `apply`/`commit`/`cancel` are set by the component that owns the drag
+ * (it holds the frozen origin the numbers are measured from).
+ */
+export interface Gesture {
+  kind: 'move' | 'resize'
+  label: string // 'X' | 'Y' | 'Z' for move, 'Length' | 'Width' for resize
+  delta: number // signed mm
+  editable: boolean
+  apply: (mm: number) => void
+  commit: () => void
+  cancel: () => void
+}
+
 /** An undoable design snapshot. Selection and tool are transient and left out. */
 interface Snapshot {
   panels: Panel[]
@@ -67,6 +84,13 @@ interface DesignState {
   /** Replace (or, when additive, extend) the selection with a set of ids —
    *  used by the marquee box-select. */
   selectInBox: (ids: string[], additive: boolean) => void
+  /** Live move/resize readout, shown in the viewport's corner HUD. Null when no
+   *  gesture is in progress. */
+  gesture: Gesture | null
+  startGesture: (gesture: Gesture) => void
+  setGestureDelta: (delta: number) => void
+  setGestureEditable: () => void
+  clearGesture: () => void
   /** Undo/redo stacks of design snapshots (transient, not persisted). */
   past: Snapshot[]
   future: Snapshot[]
@@ -196,6 +220,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
     selectedIds: [],
     dragMode: 'orbit',
     marqueeBox: null,
+    gesture: null,
     tool: 'move',
     toolPick: null,
     measurement: null,
@@ -210,7 +235,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     // Switching tools clears any in-progress pick and the shown measurement,
     // and always restores orbit (in case a drag was interrupted).
-    setTool: (tool) => set({ tool, toolPick: null, measurement: null, orbitEnabled: true, dragOrigin: null }),
+    setTool: (tool) => set({ tool, toolPick: null, measurement: null, orbitEnabled: true, dragOrigin: null, gesture: null }),
     setToolPick: (toolPick) => set({ toolPick }),
     setMeasurement: (measurement) => set({ measurement }),
     setOrbitEnabled: (orbitEnabled) => set({ orbitEnabled }),
@@ -295,6 +320,17 @@ export const useDesignStore = create<DesignState>((set, get) => {
     // Leaving select mode drops any half-drawn marquee.
     setDragMode: (dragMode) => set({ dragMode, marqueeBox: null }),
     setMarqueeBox: (marqueeBox) => set({ marqueeBox }),
+
+    startGesture: (gesture) => set({ gesture }),
+    setGestureDelta: (delta) => {
+      const g = get().gesture
+      if (g) set({ gesture: { ...g, delta } })
+    },
+    setGestureEditable: () => {
+      const g = get().gesture
+      if (g) set({ gesture: { ...g, editable: true } })
+    },
+    clearGesture: () => set({ gesture: null }),
 
     selectInBox: (ids, additive) =>
       set((state) => ({

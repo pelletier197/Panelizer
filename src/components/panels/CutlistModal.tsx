@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Grain } from '../../types/panel'
 import { generateCutlist, type SheetLayout } from '../../lib/nesting'
-import { buildParts } from '../../lib/parts'
+import { buildParts, partNames, type PartRow } from '../../lib/parts'
 import { formatMeasurement } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 import { MeasurementInput } from '../ui/MeasurementInput'
@@ -14,6 +14,22 @@ const GRAINS: { value: Grain; label: string }[] = [
 
 /** Longest sheet drawn this wide (px); everything else scales to match. */
 const SHEET_MAX_PX = 360
+
+/** Controls-panel width bounds + persisted UI preference. */
+const CONTROLS_MIN = 240
+const CONTROLS_MAX = 640
+const CONTROLS_KEY = 'wood3d.ui.cutlistControls'
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+function loadControlsWidth(): number {
+  try {
+    const raw = Number(localStorage.getItem(CONTROLS_KEY))
+    if (raw >= CONTROLS_MIN && raw <= CONTROLS_MAX) return raw
+  } catch {
+    // ignore unavailable storage
+  }
+  return 320
+}
 
 /**
  * Full-screen cutlist view. You set the global kerf and margin, enter the
@@ -44,6 +60,30 @@ export function CutlistModal() {
   const parts = useMemo(() => buildParts(panels, materials), [panels, materials])
   const grainOf = (ids: string[]) => panels.find((p) => p.id === ids[0])?.grain ?? 'length'
 
+  // Grain is edited per material + thickness, since that's how stock is keyed —
+  // one heading per sheet type, its parts listed by name underneath.
+  const grainGroups = useMemo(() => {
+    const map = new Map<string, { material: string; thickness: number; color: string; rows: PartRow[] }>()
+    for (const r of parts) {
+      const key = `${r.material}@${r.thickness}`
+      const g = map.get(key)
+      if (g) g.rows.push(r)
+      else map.set(key, { material: r.material, thickness: r.thickness, color: r.color, rows: [r] })
+    }
+    return [...map.values()]
+  }, [parts])
+
+  const asideRef = useRef<HTMLElement>(null)
+  const [controlsWidth, setControlsWidth] = useState(loadControlsWidth)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTROLS_KEY, String(controlsWidth))
+    } catch {
+      // best-effort
+    }
+  }, [controlsWidth])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -52,6 +92,21 @@ export function CutlistModal() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, setOpen])
+
+  // Drag the handle on the controls' right edge to resize it; width persists.
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const left = asideRef.current?.getBoundingClientRect().left ?? 0
+    const onMove = (ev: MouseEvent) => setControlsWidth(clamp(ev.clientX - left, CONTROLS_MIN, CONTROLS_MAX))
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   if (!open) return null
 
@@ -84,7 +139,7 @@ export function CutlistModal() {
         </header>
 
         <div className="cutlist-view__body">
-          <aside className="cutlist-view__controls">
+          <aside className="cutlist-view__controls" ref={asideRef} style={{ width: controlsWidth }}>
             <div className="field-group">
               <h3>Settings</h3>
               <MeasurementInput label="Kerf" value={kerf} defaultUnit={unit} min={0} onChange={setKerf} />
@@ -113,56 +168,73 @@ export function CutlistModal() {
                       ✕
                     </button>
                   </div>
-                  <MeasurementInput label="Thickness" value={s.thickness} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { thickness: v })} />
-                  <MeasurementInput label="Length" value={s.length} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { length: v })} />
-                  <MeasurementInput label="Width" value={s.width} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { width: v })} />
-                  <label className="field">
-                    <span className="field__label">Quantity</span>
-                    <span className="field__control">
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="∞"
-                        value={s.quantity ?? ''}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value, 10)
-                          updateStock(s.id, { quantity: Number.isFinite(n) && n > 0 ? n : null })
-                        }}
-                      />
-                    </span>
-                  </label>
+                  <div className="stock__grid">
+                    <MeasurementInput label="Thickness" value={s.thickness} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { thickness: v })} />
+                    <label className="field">
+                      <span className="field__label">Quantity</span>
+                      <span className="field__control">
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="∞"
+                          value={s.quantity ?? ''}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10)
+                            updateStock(s.id, { quantity: Number.isFinite(n) && n > 0 ? n : null })
+                          }}
+                        />
+                      </span>
+                    </label>
+                    <MeasurementInput label="Length" value={s.length} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { length: v })} />
+                    <MeasurementInput label="Width" value={s.width} defaultUnit={unit} min={1} onChange={(v) => updateStock(s.id, { width: v })} />
+                  </div>
                 </div>
               ))}
             </div>
 
             <div className="field-group">
               <h3>Grain</h3>
-              <table className="parts__table">
-                <tbody>
-                  {parts.map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.quantity}×</td>
-                      <td>
-                        {fmt(r.length)} × {fmt(r.width)}
-                      </td>
-                      <td>
-                        <select
-                          value={grainOf(r.ids)}
-                          onChange={(e) => r.ids.forEach((id) => updatePanel(id, { grain: e.target.value as Grain }))}
-                        >
-                          {GRAINS.map((g) => (
-                            <option key={g.value} value={g.value}>
-                              {g.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {grainGroups.map((group) => (
+                <div className="grain-group" key={`${group.material}@${group.thickness}`}>
+                  <div className="grain-group__head">
+                    <span className="parts__swatch" style={{ background: group.color }} /> {group.material} · {fmt(group.thickness)}
+                  </div>
+                  <table className="parts__table grain-group__table">
+                    <tbody>
+                      {group.rows.map((r, i) => (
+                        <tr key={i}>
+                          <td className="parts__name">{partNames(r.parts)}</td>
+                          <td>{r.quantity}×</td>
+                          <td>
+                            {fmt(r.length)} × {fmt(r.width)}
+                          </td>
+                          <td>
+                            <select
+                              value={grainOf(r.ids)}
+                              onChange={(e) => r.ids.forEach((id) => updatePanel(id, { grain: e.target.value as Grain }))}
+                            >
+                              {GRAINS.map((g) => (
+                                <option key={g.value} value={g.value}>
+                                  {g.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           </aside>
+
+          <div
+            className="cutlist-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={startResize}
+          />
 
           <main className="cutlist-view__result">
             {result.groups.length === 0 && result.unplaced.length === 0 && (
