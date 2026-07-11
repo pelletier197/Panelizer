@@ -12,18 +12,41 @@ const ORIENTATIONS: { value: Axis; label: string }[] = [
  *  face resizes and the thickness stays put. Thickness lives here on purpose —
  *  it is the one dimension the viewport won't let you drag. */
 export function PropertiesPanel() {
-  const panel = useDesignStore((s) => s.panels.find((p) => p.id === s.selectedId) ?? null)
+  const selectedIds = useDesignStore((s) => s.selectedIds)
+  // The editor targets a single selection; a multi-selection shows a summary.
+  const panel = useDesignStore((s) =>
+    s.selectedIds.length === 1 ? (s.panels.find((p) => p.id === s.selectedIds[0]) ?? null) : null,
+  )
   const materials = useDesignStore((s) => s.materials)
   const unit = useDesignStore((s) => s.unit)
   const updatePanel = useDesignStore((s) => s.updatePanel)
   const setPanelMaterial = useDesignStore((s) => s.setPanelMaterial)
   const removePanel = useDesignStore((s) => s.removePanel)
+  const removePanels = useDesignStore((s) => s.removePanels)
   const duplicatePanel = useDesignStore((s) => s.duplicatePanel)
+
+  if (selectedIds.length > 1) {
+    return (
+      <section className="sidebar__section properties">
+        <div className="sidebar__header">
+          <h2>{selectedIds.length} panels</h2>
+          <div className="properties__actions">
+            <button className="toolbar__danger" onClick={() => removePanels(selectedIds)}>
+              Delete
+            </button>
+          </div>
+        </div>
+        <p className="properties__hint">
+          Drag any handle to move them together. Shift+click a panel to add or remove it.
+        </p>
+      </section>
+    )
+  }
 
   if (!panel) {
     return (
       <section className="sidebar__section properties properties--empty">
-        <p>Select a panel to edit its dimensions, material, and position.</p>
+        <p>Select a panel to edit its dimensions, material, and position. Shift+click to select several.</p>
       </section>
     )
   }

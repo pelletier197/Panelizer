@@ -20,66 +20,57 @@ export function panelBounds(panel: Panel, position = panel.position): Bounds {
 }
 
 /**
- * Magnetically snap a dragged panel to its neighbours.
+ * Snap a whole group of panels as one rigid body. Each axis is considered
+ * independently: across every group member we look for the single closest
+ * snap relationship to a non-group neighbour (the same alignment/contact
+ * rules as {@link snapPosition}), and return the correction that lands that
+ * one member on its target. Applied to the group's raw drag delta, this lets
+ * *any* member's edge pull the whole formation — not just the dragged one.
  *
- * Each axis is considered independently. For every neighbour we look for two
- * kinds of relationship and keep the closest one within `threshold` mm:
- *
- *  - **alignment** — the panels' matching faces or centres line up (min↔min,
- *    centre↔centre, max↔max), which keeps a carcass flush;
- *  - **contact** — a face of the dragged panel meets a face of the neighbour
- *    (dragged.min touches neighbour.max, or dragged.max touches neighbour.min),
- *    which is how panels butt together.
- *
- * Returns the adjusted centre position; axes with no nearby target are left
- * untouched.
+ * `members` carries each panel plus its *proposed* centre (raw delta already
+ * applied). Returns a per-axis correction to add on top of the raw delta;
+ * axes with no nearby target get 0.
  */
-export function snapPosition(
-  dragged: Panel,
-  position: [number, number, number],
+export function snapGroupDelta(
+  members: { panel: Panel; position: [number, number, number] }[],
   others: Panel[],
   threshold: number,
 ): [number, number, number] {
-  const size = panelBoxSize(dragged)
   const neighbours = others.map((p) => panelBounds(p))
-  const result: [number, number, number] = [...position]
+  const correction: [number, number, number] = [0, 0, 0]
 
   for (let axis = 0; axis < 3; axis++) {
-    const half = size[axis] / 2
-    const centre = position[axis]
-    const min = centre - half
-    const max = centre + half
-
-    let bestTarget = centre
-    let bestDistance = threshold // only targets strictly closer than this win
-    let snapped = false
-    const consider = (targetCentre: number, distance: number) => {
-      if (distance <= bestDistance) {
-        bestTarget = targetCentre
-        bestDistance = distance
-        snapped = true
+    let best = 0
+    let bestDistance = threshold // only targets strictly within threshold win
+    for (const m of members) {
+      const half = panelBoxSize(m.panel)[axis] / 2
+      const centre = m.position[axis]
+      const min = centre - half
+      const max = centre + half
+      for (const n of neighbours) {
+        const nMin = n.min[axis]
+        const nMax = n.max[axis]
+        const nCentre = (nMin + nMax) / 2
+        // [correction that lands the member on the target, distance to it]
+        const candidates: [number, number][] = [
+          [nCentre - centre, Math.abs(centre - nCentre)], // centre ↔ centre
+          [nMin - min, Math.abs(min - nMin)], // min ↔ min
+          [nMax - max, Math.abs(max - nMax)], // max ↔ max
+          [nMax - min, Math.abs(min - nMax)], // contact: our min meets their max
+          [nMin - max, Math.abs(max - nMin)], // contact: our max meets their min
+        ]
+        for (const [corr, distance] of candidates) {
+          if (distance <= bestDistance) {
+            bestDistance = distance
+            best = corr
+          }
+        }
       }
     }
-
-    for (const n of neighbours) {
-      const nMin = n.min[axis]
-      const nMax = n.max[axis]
-      const nCentre = (nMin + nMax) / 2
-
-      // Alignment (targets expressed as the resulting centre position).
-      consider(nCentre, Math.abs(centre - nCentre))
-      consider(nMin + half, Math.abs(min - nMin))
-      consider(nMax - half, Math.abs(max - nMax))
-
-      // Face contact.
-      consider(nMax + half, Math.abs(min - nMax))
-      consider(nMin - half, Math.abs(max - nMin))
-    }
-
-    if (snapped) result[axis] = bestTarget
+    correction[axis] = best
   }
 
-  return result
+  return correction
 }
 
 /**

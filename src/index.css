@@ -242,6 +242,59 @@ select:focus {
   min-width: 0;
 }
 
+/* Overlay layer over the canvas: transparent to pointers except its controls. */
+.viewport-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.viewport-mode {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+  pointer-events: auto;
+}
+
+.viewport-mode button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.viewport-mode button:hover {
+  color: var(--text);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.viewport-mode button.is-active {
+  color: #fff;
+  background: var(--accent);
+}
+
+/* Rubber-band selection rectangle (visual only). */
+.viewport-marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgb(42 108 255 / 0.15);
+  pointer-events: none;
+}
+
 .tool-hint {
   padding: 6px 16px;
   font-size: 12px;
@@ -321,6 +374,12 @@ select:focus {
 
 .properties--empty {
   color: var(--text-dim);
+}
+
+.properties__hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .properties__actions {

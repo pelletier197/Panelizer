@@ -10,7 +10,7 @@ export function PartsPanel() {
   const panels = useDesignStore((s) => s.panels)
   const materials = useDesignStore((s) => s.materials)
   const unit = useDesignStore((s) => s.unit)
-  const selectedId = useDesignStore((s) => s.selectedId)
+  const selectedIds = useDesignStore((s) => s.selectedIds)
   const select = useDesignStore((s) => s.select)
   const rows = useMemo(() => buildParts(panels, materials), [panels, materials])
 
@@ -20,7 +20,7 @@ export function PartsPanel() {
   // Clicking a row selects (and so highlights) its panel. For a multi-part row
   // each click steps to the next part, so identical panels can all be found.
   const selectRow = (ids: string[]) => {
-    const at = ids.indexOf(selectedId ?? '')
+    const at = ids.findIndex((id) => selectedIds.includes(id))
     select(ids[(at + 1) % ids.length])
   }
 
@@ -50,7 +50,7 @@ export function PartsPanel() {
             {rows.map((r, i) => (
               <tr
                 key={i}
-                className={selectedId && r.ids.includes(selectedId) ? 'is-selected' : ''}
+                className={r.ids.some((id) => selectedIds.includes(id)) ? 'is-selected' : ''}
                 onClick={() => selectRow(r.ids)}
                 title={r.quantity > 1 ? 'Click to cycle through matching panels' : 'Click to select'}
               >

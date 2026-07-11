@@ -44,13 +44,29 @@ interface DesignState {
   unit: Unit
   kerf: number
   margin: number
-  selectedId: string | null
+  /** Selected panels. Empty = nothing selected; one id = the classic single
+   *  selection; several = a multi-selection (Shift+click) that moves together.
+   *  The last id is the "primary" — it carries the move gizmo. */
+  selectedIds: string[]
   tool: Tool
   toolPick: ToolPick | null
   measurement: { a: Point; b: Point } | null
   /** Whether orbit navigation is live. Resize handles switch this off while
    *  the pointer is on them so a face-drag never spins the camera. */
   orbitEnabled: boolean
+  /** Left-drag behaviour in the viewport: `orbit` spins the camera (default),
+   *  `select` draws a rubber-band box that selects the panels it covers.
+   *  Toggled from the corner control in the viewport. Transient UI state. */
+  dragMode: 'orbit' | 'select'
+  setDragMode: (mode: 'orbit' | 'select') => void
+  /** A completed marquee rectangle (canvas pixels) handed from the DOM overlay
+   *  to the in-canvas picker, which projects panels against it and selects.
+   *  Cleared once consumed. */
+  marqueeBox: { x: number; y: number; w: number; h: number; additive: boolean } | null
+  setMarqueeBox: (box: DesignState['marqueeBox']) => void
+  /** Replace (or, when additive, extend) the selection with a set of ids —
+   *  used by the marquee box-select. */
+  selectInBox: (ids: string[], additive: boolean) => void
   /** Undo/redo stacks of design snapshots (transient, not persisted). */
   past: Snapshot[]
   future: Snapshot[]
@@ -73,14 +89,22 @@ interface DesignState {
   addPanel: (preset?: Partial<Panel>) => void
   updatePanel: (id: string, patch: Partial<Panel>) => void
   movePanelLive: (id: string, position: [number, number, number]) => void
+  /** Live (non-persisted) move of several panels at once — the group drag. */
+  movePanelsLive: (moves: { id: string; position: [number, number, number] }[]) => void
+  /** Commit a group move as a single undo step. */
+  commitPanelsMove: (moves: { id: string; position: [number, number, number] }[]) => void
   resizePanelLive: (id: string, patch: Partial<Panel>) => void
   removePanel: (id: string) => void
+  /** Remove several panels in one undo step (multi-selection delete). */
+  removePanels: (ids: string[]) => void
   duplicatePanel: (id: string) => void
   setPanelMaterial: (panelId: string, materialId: string) => void
   select: (id: string | null) => void
   /** Select from a click in the 3D scene — no-ops once if a resize drag just
-   *  armed suppression, so releasing a handle doesn't select the panel under it. */
-  sceneSelect: (id: string) => void
+   *  armed suppression, so releasing a handle doesn't select the panel under it.
+   *  `additive` (Shift+click) toggles the panel in/out of the current selection
+   *  instead of replacing it. */
+  sceneSelect: (id: string, additive?: boolean) => void
   /** Swallow the next scene-select (the click synthesised when a drag ends). */
   armSelectSuppression: () => void
 
@@ -146,7 +170,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
   const applyHistory = (snap: Snapshot, from: 'past' | 'future') => {
     const current = get()
     saveToStorage(snap)
-    const stillThere = snap.panels.some((p) => p.id === current.selectedId)
+    const ids = new Set(snap.panels.map((p) => p.id))
     set({
       panels: snap.panels,
       materials: snap.materials,
@@ -154,7 +178,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
       unit: snap.unit,
       kerf: snap.kerf,
       margin: snap.margin,
-      selectedId: stillThere ? current.selectedId : null,
+      selectedIds: current.selectedIds.filter((id) => ids.has(id)),
       toolPick: null,
       dragOrigin: null,
       past: from === 'past' ? current.past.slice(0, -1) : [...current.past, snapshot(current)],
@@ -169,7 +193,9 @@ export const useDesignStore = create<DesignState>((set, get) => {
     unit: initial.unit,
     kerf: initial.kerf,
     margin: initial.margin,
-    selectedId: null,
+    selectedIds: [],
+    dragMode: 'orbit',
+    marqueeBox: null,
     tool: 'move',
     toolPick: null,
     measurement: null,
@@ -205,7 +231,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
         thickness: defaultThickness(get().unit),
         ...preset, // a preset may override thickness (e.g. a thin back)
       })
-      commit({ panels: [...get().panels, panel], selectedId: panel.id })
+      commit({ panels: [...get().panels, panel], selectedIds: [panel.id] })
     },
 
     updatePanel: (id, patch) => {
@@ -218,6 +244,16 @@ export const useDesignStore = create<DesignState>((set, get) => {
       live(get().panels.map((p) => (p.id === id ? { ...p, position } : p)))
     },
 
+    movePanelsLive: (moves) => {
+      const next = new Map(moves.map((m) => [m.id, m.position]))
+      live(get().panels.map((p) => (next.has(p.id) ? { ...p, position: next.get(p.id)! } : p)))
+    },
+
+    commitPanelsMove: (moves) => {
+      const next = new Map(moves.map((m) => [m.id, m.position]))
+      commit({ panels: get().panels.map((p) => (next.has(p.id) ? { ...p, position: next.get(p.id)! } : p)) })
+    },
+
     // Live length/width/position update while dragging a resize face handle;
     // same non-autosaved pattern as movePanelLive.
     resizePanelLive: (id, patch) => {
@@ -227,7 +263,15 @@ export const useDesignStore = create<DesignState>((set, get) => {
     removePanel: (id) => {
       commit({
         panels: get().panels.filter((p) => p.id !== id),
-        selectedId: get().selectedId === id ? null : get().selectedId,
+        selectedIds: get().selectedIds.filter((x) => x !== id),
+      })
+    },
+
+    removePanels: (ids) => {
+      const drop = new Set(ids)
+      commit({
+        panels: get().panels.filter((p) => !drop.has(p.id)),
+        selectedIds: get().selectedIds.filter((x) => !drop.has(x)),
       })
     },
 
@@ -239,7 +283,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
         name: `${source.name} copy`,
         position: [source.position[0] + 30, source.position[1], source.position[2]],
       })
-      commit({ panels: [...get().panels, copy], selectedId: copy.id })
+      commit({ panels: [...get().panels, copy], selectedIds: [copy.id] })
     },
 
     setPanelMaterial: (panelId, materialId) => {
@@ -248,14 +292,30 @@ export const useDesignStore = create<DesignState>((set, get) => {
       })
     },
 
-    select: (id) => set({ selectedId: id, dragOrigin: null }),
+    // Leaving select mode drops any half-drawn marquee.
+    setDragMode: (dragMode) => set({ dragMode, marqueeBox: null }),
+    setMarqueeBox: (marqueeBox) => set({ marqueeBox }),
 
-    sceneSelect: (id) => {
+    selectInBox: (ids, additive) =>
+      set((state) => ({
+        selectedIds: additive ? Array.from(new Set([...state.selectedIds, ...ids])) : ids,
+        dragOrigin: null,
+      })),
+
+    select: (id) => set({ selectedIds: id ? [id] : [], dragOrigin: null }),
+
+    sceneSelect: (id, additive = false) => {
       if (get().suppressSelect) {
         set({ suppressSelect: false })
         return
       }
-      set({ selectedId: id, dragOrigin: null })
+      const current = get().selectedIds
+      const selectedIds = additive
+        ? current.includes(id)
+          ? current.filter((x) => x !== id) // toggle out
+          : [...current, id] // add (becomes new primary)
+        : [id]
+      set({ selectedIds, dragOrigin: null })
     },
 
     // Arm suppression for the click the browser fires when a drag ends, and
@@ -305,8 +365,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
     setMargin: (margin) => commit({ margin: Math.max(0, margin) }),
 
     loadDesign: ({ panels, materials, stocks, unit, kerf, margin }) =>
-      commit({ panels, materials, stocks, unit, kerf, margin, selectedId: null }),
+      commit({ panels, materials, stocks, unit, kerf, margin, selectedIds: [] }),
 
-    clear: () => commit({ panels: [], stocks: [], selectedId: null }),
+    clear: () => commit({ panels: [], stocks: [], selectedIds: [] }),
   }
 })
