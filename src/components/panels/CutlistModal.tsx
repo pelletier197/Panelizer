@@ -215,6 +215,9 @@ export function CutlistModal() {
                     <tbody>
                       {group.rows.map((r, i) => {
                         const note = unplacedNote(r.ids)
+                        // Use the real panel's length/width (PartRow dims are
+                        // normalised longest-first, which would flip the thumb).
+                        const panel = panels.find((p) => p.id === r.ids[0])
                         return (
                           <tr
                             key={i}
@@ -223,7 +226,11 @@ export function CutlistModal() {
                             onMouseLeave={() => setHovered(null)}
                           >
                             <td>
-                              <GrainThumb length={r.length} width={r.width} grain={grainOf(r.ids)} />
+                              <GrainThumb
+                                length={panel?.length ?? r.length}
+                                width={panel?.width ?? r.width}
+                                grain={panel?.grain ?? 'length'}
+                              />
                             </td>
                             <td className="parts__name">
                               {partNames(r.parts)}
@@ -413,33 +420,40 @@ function SheetSvg({
   )
 }
 
-/** A tiny orientation preview: the part drawn length-horizontal, with grain
- *  lines showing which edge the grain runs along (free parts show a ↻). */
+/** A tiny preview of the part as it sits on the sheet. Sheet length is
+ *  horizontal, so a `width`-grain part is turned 90° (its footprint becomes
+ *  width × length) — the rectangle's proportions show how it's being placed.
+ *  Faint horizontal lines mark the grain running along the sheet length; a free
+ *  part shows a ↻ (the packer may rotate it either way). */
 function GrainThumb({ length, width, grain }: { length: number; width: number; grain: Grain }) {
-  const BOX_W = 36
-  const BOX_H = 24
+  const rotated = grain === 'width' // grain edge must lie along the sheet length
+  const footW = rotated ? width : length // horizontal extent on the sheet
+  const footH = rotated ? length : width
+
+  const BOX_W = 40
+  const BOX_H = 26
   const pad = 3
-  const s = Math.min((BOX_W - 2 * pad) / length, (BOX_H - 2 * pad) / width)
-  const w = Math.max(4, length * s)
-  const h = Math.max(4, width * s)
+  const s = Math.min((BOX_W - 2 * pad) / footW, (BOX_H - 2 * pad) / footH)
+  const w = Math.max(4, footW * s)
+  const h = Math.max(4, footH * s)
   const x = (BOX_W - w) / 2
   const y = (BOX_H - h) / 2
 
   const lines = []
-  const n = 3
-  if (grain === 'length') {
+  if (grain !== 'none') {
+    const n = 3
     for (let i = 1; i <= n; i++) {
       const yy = y + (h * i) / (n + 1)
       lines.push(<line key={i} x1={x + 2} y1={yy} x2={x + w - 2} y2={yy} />)
     }
-  } else if (grain === 'width') {
-    for (let i = 1; i <= n; i++) {
-      const xx = x + (w * i) / (n + 1)
-      lines.push(<line key={i} x1={xx} y1={y + 2} x2={xx} y2={y + h - 2} />)
-    }
   }
 
-  const title = grain === 'none' ? 'Free (no grain)' : `Grain along ${grain}`
+  const title =
+    grain === 'none'
+      ? 'Free — the packer may rotate it to fit'
+      : rotated
+        ? 'Turned 90° on the sheet (grain along width)'
+        : 'As drawn on the sheet (grain along length)'
   return (
     <svg className="grain-thumb" width={BOX_W} height={BOX_H} aria-hidden>
       <title>{title}</title>
