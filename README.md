@@ -1,68 +1,71 @@
-# 🪚 Panelizer
+<div align="center">
+  
+  # 🪚 Panelizer
 
-> A free, fast, browser-based cabinet and plywood designer that turns your ideas into accurate cutlists.
+  **A free, fast, browser-based cabinet and plywood designer.** <br>
+  *Turn your ideas into accurate cutlists in minutes.*
 
-Design cabinets panel by panel, edit them directly in 3D, and generate optimized sheet layouts — all in your browser, with nothing to install.
+  [![Live App](https://img.shields.io/badge/▶_Try_Panelizer_Now-0052FF?style=for-the-badge)](https://pelletier197.github.io/panelizer/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+  [![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
-**[▶ Try it now](https://pelletier197.github.io/panelizer/)** · No sign-up, no download.
+  <br>
 
-![Screenshot](docs/screenshot.png)
+  <img src="docs/screenshot.png" alt="Panelizer Workspace Screenshot" width="850"/>
 
----
-
-## Why Panelizer?
-
-Designing shop furniture usually means juggling tools: you model in one app, export to another to get a cutlist, and hunt for a plugin to bridge the two. Panelizer folds all of that into one place — model, part list, and optimized cutlist, together, for free.
-
-It's built for speed and a gentle learning curve, not to replace heavyweight CAD. If you need full parametric modeling, SketchUp or Fusion 360 are the right tools. If you want to sketch a cabinet and walk into the shop with a cut diagram five minutes later, that's Panelizer.
-
----
-
-## Features
-
-### ✨ Interactive 3D editing
-
-- Create plywood panels directly in a 3D workspace
-- Drag to move and resize panels
-- Assembly-aware snapping
-- Visual overlap detection
-- Mix multiple materials and thicknesses
-
-### 📏 Built for real woodworking
-
-Working in 18mm plywood but thinking in inches? No problem. Pick your preferred unit for anything, mix and match freely, and Panelizer handles the conversions for you.
-
-### 📋 Automatic parts list
-
-Every panel becomes a manufacturing part automatically. Get a clean list with dimensions, material, thickness, and quantity — then export to CSV when you're ready to order or build.
-
-### 🪵 Smart cutlist generation
-
-One of Panelizer's biggest strengths. Tell it what sheet goods you have on hand (material, thickness, sheet size, quantity) and it will:
-
-- Group parts by material
-- Nest them onto sheets, minimizing waste
-- Respect grain direction
-- Account for kerf and edge margins
-- Flag missing stock and insufficient sheets
-
-The result is a visual cut diagram that's actually useful at the saw.
-
-### 💾 No backend required
-
-Everything runs locally in your browser — no accounts, no cloud, no server, no uploads. Projects save to a simple JSON file you can reopen anytime, anywhere.
+</div>
 
 ---
 
+## 💡 Why Panelizer?
 
-## Contributing
+Designing shop furniture usually means juggling tools: you model in one app, export to another to get a part list, and hunt down a plugin for your cut layouts. **Panelizer folds all of that into one place.**
 
-Issues and pull requests are welcome. Found a bug or have a feature idea? [Open an issue](https://github.com/pelletier197/panelizer/issues).
+> **Model, extract parts, and generate optimized cutlists — together, for free, directly in your browser.**
 
-If you wish to contribute, see the [Contributing guide](CONTRIBUTING.md) for setup instructions and project structure.
+It’s built for **speed and simplicity**, not to replace heavyweight CAD. 
+* **Need full parametric modeling?** SketchUp or Fusion 360 are the right tools.
+* **Want to sketch a cabinet and walk into the shop with a cut diagram 5 minutes later?** That’s Panelizer.
 
 ---
 
-## License
+## ✨ Features
 
-Released under the [MIT License](LICENSE).
+### 🛠️ Interactive 3D Editing
+* **Direct Manipulation:** Create, move, and resize plywood panels right in the 3D workspace.
+* **Smart Snapping:** Assembly-aware snapping ensures your joints line up perfectly.
+* **Error Prevention:** Visual overlap detection catches mistakes *before* you make a cut.
+* **Ultimate Flexibility:** Mix multiple materials and thicknesses in the exact same build.
+
+### 📐 Built for Real Woodworking
+Working in `18mm` plywood but thinking in `inches`? No problem. Pick your preferred unit for *anything*, mix and match freely, and Panelizer handles the conversions for you.
+
+### 📋 Automatic Parts List
+Every panel becomes a manufacturing part automatically. Get a clean, real-time list detailing **dimensions, material, thickness, and quantity**. When you're ready to order or build, hit export to generate a CSV.
+
+### 🪵 Smart Cutlist Generation
+*One of Panelizer's biggest strengths.* Tell it what sheet goods you have on hand, and its optimization engine handles the rest:
+- 🧩 **Nests parts** onto sheets to minimize waste.
+- 🌲 **Respects grain direction** for visible panels.
+- 🪚 **Accounts for kerf** and edge margins.
+- 🚨 **Flags missing stock** or insufficient sheets.
+
+*The result? A visual cut diagram that's actually useful at the saw.*
+
+### 🔒 100% Local & Private
+Everything runs locally in your browser. **No accounts, no cloud, no server, no uploads, no limit.** Projects save directly to your machine as a simple JSON file you can reopen anytime, anywhere.
+
+---
+
+## 🤝 Contributing
+
+Issues and pull requests are always welcome! Whether you found a bug or have a brilliant feature idea, we'd love to hear from you.
+
+1. Check out the [Contributing Guide](CONTRIBUTING.md) for local setup instructions and project structure.
+2. [Open an issue](https://github.com/pelletier197/panelizer/issues) or submit a Pull Request.
+
+---
+
+## 📄 License
+
+Panelizer is open-source software released under the [MIT License](LICENSE).
