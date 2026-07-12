@@ -15,7 +15,7 @@
 
   ![Demo](public/demo.gif)
 
-<div style="font-style: italic; font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
+<div>
   See the full video
   <a href="https://github.com/pelletier197/Panelizer/blob/main/public/demo.webm" target="_blank">here</a>.
   </div>
