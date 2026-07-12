@@ -7,13 +7,13 @@
   **A free, fast, browser-based cabinet and plywood designer.** <br>
   *Turn your ideas into accurate cutlists in minutes.*
 
-  [![Live App](https://img.shields.io/badge/▶_Try_Panelizer_Now-0052FF?style=for-the-badge)](https://pelletier197.github.io/panelizer/)
+  [![Live App](https://img.shields.io/badge/▶_Try_Panelizer_Now-0052FF?style=for-the-badge)](https://pelletier197.github.io/Panelizer/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
   [![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
   <br>
 
-  ![Watch the video](./public/tour.mp4)
+  ![Demo](public/demo.gif)
 
 </div>
 
