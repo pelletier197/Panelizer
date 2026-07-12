@@ -25,7 +25,7 @@ const PRINT_SHEET_MAX_PX = 680
 /** Controls-panel width bounds + persisted UI preference. */
 const CONTROLS_MIN = 240
 const CONTROLS_MAX = 640
-const CONTROLS_KEY = 'wood3d.ui.cutlistControls'
+const CONTROLS_KEY = 'panelizer.ui.cutlistControls'
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
 function loadControlsWidth(): number {

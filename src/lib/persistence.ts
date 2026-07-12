@@ -5,8 +5,8 @@ import type { Stock } from './stock'
 import type { Unit } from './units'
 import { defaultMaterials, findMaterial } from './materials'
 
-const STORAGE_KEY = 'wood3d.autosave'
-const FORMAT = 'wood3d'
+const STORAGE_KEY = 'panelizer.autosave'
+const FORMAT = 'panelizer'
 const VERSION = 1
 
 /** Default saw kerf and sheet trim margin (mm), used for cutlist nesting. */
@@ -46,7 +46,7 @@ export function serialize({ panels, materials, stocks, unit, kerf, margin }: Des
 export function parse(json: string): Design {
   const data = JSON.parse(json) as Partial<DesignFile>
   if (data.format !== FORMAT || !Array.isArray(data.panels)) {
-    throw new Error('This file is not a valid Wood3D design.')
+    throw new Error('This file is not a valid Panelizer design.')
   }
 
   const materials =
@@ -70,8 +70,8 @@ export function parse(json: string): Design {
   }
 }
 
-/** Trigger a browser download of the design as a `.wood3d.json` file. */
-export function downloadDesign(design: Design, filename = 'cabinet.wood3d.json'): void {
+/** Trigger a browser download of the design as a `.panelizer.json` file. */
+export function downloadDesign(design: Design, filename = 'cabinet.panelizer.json'): void {
   const json = JSON.stringify(serialize(design), null, 2)
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
   const link = document.createElement('a')

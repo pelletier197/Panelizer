@@ -60,7 +60,7 @@ export function Toolbar() {
   return (
     <>
     <header className="toolbar">
-      <div className="toolbar__brand">Wood3D</div>
+      <img src="/Panelizer/logo.png" alt="Panelizer" className="toolbar__logo" />
 
       <Menu label="+ Add">
         {(close) => (

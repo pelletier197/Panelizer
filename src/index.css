@@ -111,12 +111,18 @@ select:focus {
 /* ---- Toolbar buckets (multi-mode dropdowns, e.g. Move) ------------------ */
 
 /* Bucket name on top, active sub-mode stacked underneath. */
+.toolbar__logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
 .toolbar__bucket {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   line-height: 1.15;
-  gap: 1px;
+  gap: 5px;
 }
 
 .toolbar__bucket.is-active {

@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 const MIN_WIDTH = 260
 const MAX_WIDTH = 560
 const DEFAULT_WIDTH = 320
-const STORAGE_KEY = 'wood3d.ui.sidebar'
+const STORAGE_KEY = 'panelizer.ui.sidebar'
 
 interface SidebarPrefs {
   width: number
