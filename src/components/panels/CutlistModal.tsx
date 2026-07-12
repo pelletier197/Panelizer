@@ -534,6 +534,7 @@ function SheetSvg({
       </svg>
       <figcaption>
         Sheet {sheet.index} · {label(sheet.length)} × {label(sheet.width)}
+        <span className="sheet__grain-hint">↔ grain</span>
       </figcaption>
     </figure>
   )

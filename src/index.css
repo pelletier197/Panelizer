@@ -925,6 +925,20 @@ select:focus {
   stroke-dasharray: 4 3;
 }
 
+/* Grain-direction hint in the caption (grain runs along the sheet length) —
+ * a small pill so it reads at a glance without shouting. */
+.sheet__grain-hint {
+  margin-left: 7px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  color: color-mix(in srgb, var(--accent) 60%, var(--text));
+  font-size: 9px;
+  font-variant-numeric: normal;
+  white-space: nowrap;
+}
+
 .sheet__part {
   stroke: rgba(0, 0, 0, 0.55);
   stroke-width: 1;
