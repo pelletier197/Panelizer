@@ -36,6 +36,11 @@ export interface Panel {
   /** When true the part is skipped by the cutlist nesting (e.g. it's already
    *  cut). Absent/false means it's included. */
   excludeFromCutlist?: boolean
+  /** When true the panel is drawn as a non-interactive ghost: still visible as a
+   *  faint mesh and still counted for snapping, overlaps and the cutlist, but it
+   *  can't be clicked or dragged in the viewport. Toggled from the parts list.
+   *  Absent/false means it's a normal, solid, clickable panel. */
+  hidden?: boolean
 }
 
 /** Woodworking default: grain runs along the longer face edge. Ties go to

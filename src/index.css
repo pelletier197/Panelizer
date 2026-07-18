@@ -150,6 +150,17 @@ select:focus {
   pointer-events: none;
 }
 
+.snap-label {
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #0d0f13;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* Corner readout HUD for the live move/resize delta. Sits out of the main view
  * in the viewport's bottom-left, and only appears during/after a gesture. */
 .gesture-readout {
@@ -674,6 +685,75 @@ select:focus {
   margin: 12px 0 0;
   color: var(--text-dim);
   font-size: 12px;
+}
+
+.parts__toggle-col,
+.parts__eye-col {
+  width: 24px;
+  padding-left: 2px;
+  padding-right: 2px;
+  text-align: center;
+}
+
+.parts__chevron {
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.parts__chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.parts__chevron:hover {
+  color: var(--text);
+}
+
+.parts__eye {
+  display: inline-flex;
+  padding: 2px;
+  /* Visible panels get a lit, coloured eye; hidden ones read as muted + struck
+     through, so a row's on/off state is obvious at a glance. */
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.parts__eye:hover {
+  color: color-mix(in srgb, var(--accent) 70%, #fff);
+}
+
+.parts__eye.is-off {
+  color: color-mix(in srgb, var(--text-dim) 55%, transparent);
+}
+
+.parts__material {
+  white-space: nowrap;
+}
+
+.parts__child > td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.parts__child .parts__name {
+  padding-left: 4px;
+  color: var(--text);
+}
+
+.parts__child.is-hidden .parts__name {
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 /* ---- Cutlist view ------------------------------------------------------- */

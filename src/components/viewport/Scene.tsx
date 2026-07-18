@@ -1,6 +1,7 @@
 import { useDesignStore } from '../../store/designStore'
 import { PanelMesh } from './PanelMesh'
 import { OverlapHighlights } from './OverlapHighlights'
+import { SnapHints } from './SnapHints'
 import { ToolOverlay } from './ToolOverlay'
 
 /** The cabinet itself: one mesh per panel, plus overlap markers at joints.
@@ -13,6 +14,7 @@ export function Scene() {
         <PanelMesh key={panel.id} panel={panel} />
       ))}
       <OverlapHighlights />
+      <SnapHints />
       <ToolOverlay />
     </>
   )

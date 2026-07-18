@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { Mesh } from 'three'
+import { Mesh } from 'three'
 import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, panelBoxSize } from '../../lib/geometry'
@@ -15,6 +15,12 @@ const toMetres = ([x, y, z]: Vec3): Vec3 => [x * MM_TO_M, y * MM_TO_M, z * MM_TO
 /** A gesture that moved the primary less than this (mm) is a click, not a drag. */
 const MOVE_THRESHOLD_MM = 0.5
 const AXIS_NAME = ['X', 'Y', 'Z'] as const
+
+// A hidden panel opts out of ray-picking; a visible one uses Three's default.
+// Passing the explicit default (not `undefined`) is what lets a re-shown panel
+// become clickable again — r3f won't restore the default on its own.
+const NULL_RAYCAST = () => null
+const DEFAULT_RAYCAST = Mesh.prototype.raycast
 
 /** The active axis of a translate drag, inferred from the raw displacement: a
  *  single-axis gizmo drag moves along exactly one axis (the other two stay 0),
@@ -40,10 +46,12 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   const setGestureDelta = useDesignStore((s) => s.setGestureDelta)
   const setGestureEditable = useDesignStore((s) => s.setGestureEditable)
   const clearGesture = useDesignStore((s) => s.clearGesture)
+  const setSnapHints = useDesignStore((s) => s.setSnapHints)
   const panels = useDesignStore((s) => s.panels)
   const tool = useDesignStore((s) => s.tool)
   const color = useDesignStore((s) => findMaterial(s.materials, panel.materialId).color)
 
+  const hidden = panel.hidden === true
   const selected = selectedIds.includes(panel.id)
   // The last-selected panel carries the move gizmo for the whole group.
   const isPrimary = selectedIds[selectedIds.length - 1] === panel.id
@@ -133,9 +141,15 @@ export function PanelMesh({ panel }: { panel: Panel }) {
       position: [s.position[0] + raw[0], s.position[1] + raw[1], s.position[2] + raw[2]] as Vec3,
     }))
     const others = panels.filter((p) => !selectedIds.includes(p.id))
-    const corr = snapGroupDelta(proposed, others, SNAP_THRESHOLD_MM)
+    const { correction: corr, snaps } = snapGroupDelta(proposed, others, SNAP_THRESHOLD_MM)
     const active = axisRef.current
-    const delta: Vec3 = [0, 1, 2].map((a) => raw[a] + (active === null || active === a ? corr[a] : 0)) as Vec3
+    // A snap counts only on axes the drag is actually moving: the locked axis
+    // for a single-axis gizmo drag, or (for a plane drag) any axis that has
+    // travelled a real distance. Without the movement gate a stationary axis
+    // that merely happens to sit within threshold would snap "out of nowhere".
+    const applies = (a: 0 | 1 | 2) =>
+      active === a || (active === null && Math.abs(raw[a]) > MOVE_THRESHOLD_MM)
+    const delta: Vec3 = [0, 1, 2].map((a) => raw[a] + (applies(a as 0 | 1 | 2) ? corr[a] : 0)) as Vec3
 
     obj.position.set(
       (primaryStart[0] + delta[0]) * MM_TO_M,
@@ -143,6 +157,24 @@ export function PanelMesh({ panel }: { panel: Panel }) {
       (primaryStart[2] + delta[2]) * MM_TO_M,
     )
     applyGroupDelta(start, delta)
+
+    // Surface a marker for each axis that actually snapped, positioned on the
+    // primary panel's snapped centre so the guide sits where the eye is.
+    const centre: Vec3 = [primaryStart[0] + delta[0], primaryStart[1] + delta[1], primaryStart[2] + delta[2]]
+    const boxSize = panelBoxSize(panel)
+    setSnapHints(
+      ([0, 1, 2] as const).flatMap((a) => {
+        const snap = snaps[a]
+        if (!snap || !applies(a)) return []
+        // One guide per coincident target, so a flush fit shows both faces —
+        // only the first is labelled so the words don't stack.
+        return snap.hits.map((h, i) => {
+          const at: Vec3 = [...centre]
+          at[a] = h.plane
+          return { axis: a, kind: h.kind, at, size: boxSize, label: i === 0 }
+        })
+      }),
+    )
 
     // Live readout for single-axis drags only (a plane drag has no one number).
     if (active !== null) {
@@ -158,6 +190,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   // (commit deferred); a plane drag commits at once; a negligible nudge is a
   // click and changes nothing.
   const endDrag = () => {
+    setSnapHints([]) // the guides belong to the live drag only
     const start = groupStart.current
     if (start.length === 0) return
     const primaryStart = start.find((s) => s.id === panel.id)?.position ?? panel.position
@@ -186,21 +219,38 @@ export function PanelMesh({ panel }: { panel: Panel }) {
       <mesh
         ref={meshRef}
         position={position}
-        onClick={(e) => {
-          e.stopPropagation()
-          sceneSelect(panel.id, e.nativeEvent.shiftKey)
-        }}
+        // A hidden panel is a ghost: it stays on screen (so it still reads as
+        // part of the model and can guide snapping) but ignores the ray, so it
+        // can't be clicked or dragged.
+        raycast={hidden ? NULL_RAYCAST : DEFAULT_RAYCAST}
+        onClick={
+          hidden
+            ? undefined
+            : (e) => {
+                e.stopPropagation()
+                sceneSelect(panel.id, e.nativeEvent.shiftKey)
+              }
+        }
       >
         <boxGeometry args={size} />
+        {/* A hidden panel is a faint light-grey ghost: a barely-there transparent
+            fill so its shape still reads, but you can see straight through it.
+            The `key` forces a fresh material when visibility flips — toggling
+            `transparent` on an existing material doesn't reliably take, leaving
+            it rendering opaque. */}
         <meshStandardMaterial
-          color={color}
+          key={hidden ? 'ghost' : 'solid'}
+          color={hidden ? '#c9ced7' : color}
+          transparent={hidden}
+          opacity={hidden ? 0.2 : 1}
+          depthWrite={!hidden}
           emissive={selected ? '#2a6cff' : '#000000'}
           emissiveIntensity={selected ? 0.35 : 0}
         />
-        <Edges threshold={15} color={selected ? '#2a6cff' : '#5a4a32'} />
+        <Edges threshold={15} color={selected ? '#2a6cff' : hidden ? '#6a7180' : '#5a4a32'} />
       </mesh>
 
-      {selected && isPrimary && tool === 'move' && (
+      {!hidden && selected && isPrimary && tool === 'move' && (
         <TransformControls
           object={meshRef}
           mode="translate"
@@ -210,7 +260,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
         />
       )}
 
-      {selected && selectedIds.length === 1 && tool === 'resize' && <ResizeHandles panel={panel} />}
+      {!hidden && selected && selectedIds.length === 1 && tool === 'resize' && <ResizeHandles panel={panel} />}
     </>
   )
 }

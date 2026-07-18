@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Panel } from '../types/panel'
+import type { SnapHint } from '../lib/snapping'
 import type { Design } from '../lib/persistence'
 import type { Material } from '../lib/materials'
 import type { Stock } from '../lib/stock'
@@ -84,6 +85,11 @@ interface DesignState {
   /** Replace (or, when additive, extend) the selection with a set of ids —
    *  used by the marquee box-select. */
   selectInBox: (ids: string[], additive: boolean) => void
+  /** Active snap markers for the current drag, shown in the viewport as plane
+   *  guides with a label (edge / butt / middle). Empty when not snapping.
+   *  Transient UI state — never persisted or undone. */
+  snapHints: SnapHint[]
+  setSnapHints: (hints: SnapHint[]) => void
   /** Live move/resize readout, shown in the viewport's corner HUD. Null when no
    *  gesture is in progress. */
   gesture: Gesture | null
@@ -126,6 +132,9 @@ interface DesignState {
   removePanel: (id: string) => void
   /** Remove several panels in one undo step (multi-selection delete). */
   removePanels: (ids: string[]) => void
+  /** Show/hide several panels in one undo step. Hidden panels render as ghosts
+   *  and can't be clicked, but still count for snapping/overlaps/cutlist. */
+  setHidden: (ids: string[], hidden: boolean) => void
   duplicatePanel: (id: string) => void
   setPanelMaterial: (panelId: string, materialId: string) => void
   select: (id: string | null) => void
@@ -225,6 +234,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
     selectedIds: [],
     dragMode: 'orbit',
     marqueeBox: null,
+    snapHints: [],
     gesture: null,
     tool: 'move',
     toolPick: null,
@@ -240,7 +250,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     // Switching tools clears any in-progress pick and the shown measurement,
     // and always restores orbit (in case a drag was interrupted).
-    setTool: (tool) => set({ tool, toolPick: null, measurement: null, orbitEnabled: true, dragOrigin: null, gesture: null }),
+    setTool: (tool) => set({ tool, toolPick: null, measurement: null, orbitEnabled: true, dragOrigin: null, gesture: null, snapHints: [] }),
     setToolPick: (toolPick) => set({ toolPick }),
     setMeasurement: (measurement) => set({ measurement }),
     setOrbitEnabled: (orbitEnabled) => set({ orbitEnabled }),
@@ -313,6 +323,16 @@ export const useDesignStore = create<DesignState>((set, get) => {
       })
     },
 
+    setHidden: (ids, hidden) => {
+      const targets = new Set(ids)
+      commit({
+        panels: get().panels.map((p) => (targets.has(p.id) ? { ...p, hidden } : p)),
+        // A hidden panel can't be interacted with, so drop it from any active
+        // selection (keeps a stale gizmo off a ghosted mesh).
+        selectedIds: hidden ? get().selectedIds.filter((x) => !targets.has(x)) : get().selectedIds,
+      })
+    },
+
     duplicatePanel: (id) => {
       const source = get().panels.find((p) => p.id === id)
       if (!source) return
@@ -333,6 +353,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
     // Leaving select mode drops any half-drawn marquee.
     setDragMode: (dragMode) => set({ dragMode, marqueeBox: null }),
     setMarqueeBox: (marqueeBox) => set({ marqueeBox }),
+
+    setSnapHints: (snapHints) => set({ snapHints }),
 
     startGesture: (gesture) => set({ gesture }),
     setGestureDelta: (delta) => {
