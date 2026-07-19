@@ -4,6 +4,7 @@ import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, panelBoxSize } from '../../lib/geometry'
 import { findMaterial } from '../../lib/materials'
+import { roundToUnitGrid } from '../../lib/units'
 import { SNAP_THRESHOLD_MM, snapGroupDelta } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
 import { ResizeHandles } from './ResizeHandles'
@@ -49,6 +50,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
   const panels = useDesignStore((s) => s.panels)
   const tool = useDesignStore((s) => s.tool)
+  const unit = useDesignStore((s) => s.unit)
   const color = useDesignStore((s) => findMaterial(s.materials, panel.materialId).color)
 
   const hidden = panel.hidden === true
@@ -84,7 +86,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
     commitPanelsMove(
       s.panels
         .filter((p) => s.selectedIds.includes(p.id))
-        .map((p) => ({ id: p.id, position: p.position.map(Math.round) as Vec3 })),
+        .map((p) => ({ id: p.id, position: p.position.map((v) => roundToUnitGrid(v, unit)) as Vec3 })),
     )
   }
 
@@ -158,10 +160,9 @@ export function PanelMesh({ panel }: { panel: Panel }) {
     )
     applyGroupDelta(start, delta)
 
-    // Surface a marker for each axis that actually snapped, positioned on the
-    // primary panel's snapped centre so the guide sits where the eye is.
-    const centre: Vec3 = [primaryStart[0] + delta[0], primaryStart[1] + delta[1], primaryStart[2] + delta[2]]
-    const boxSize = panelBoxSize(panel)
+    // Surface a marker for each axis that actually snapped. Each guide is drawn
+    // on the contact rectangle (the overlap of the two panels), not the whole
+    // face, so a partial or near-miss joint reads clearly.
     setSnapHints(
       ([0, 1, 2] as const).flatMap((a) => {
         const snap = snaps[a]
@@ -169,9 +170,16 @@ export function PanelMesh({ panel }: { panel: Panel }) {
         // One guide per coincident target, so a flush fit shows both faces —
         // only the first is labelled so the words don't stack.
         return snap.hits.map((h, i) => {
-          const at: Vec3 = [...centre]
-          at[a] = h.plane
-          return { axis: a, kind: h.kind, at, size: boxSize, label: i === 0 }
+          const at: Vec3 = [0, 0, 0]
+          const size: Vec3 = [0, 0, 0]
+          for (const k of [0, 1, 2] as const) {
+            if (k === a) at[k] = h.plane
+            else {
+              at[k] = (h.lo[k] + h.hi[k]) / 2
+              size[k] = Math.max(0, h.hi[k] - h.lo[k])
+            }
+          }
+          return { axis: a, kind: h.kind, at, size, label: i === 0 }
         })
       }),
     )
@@ -219,6 +227,9 @@ export function PanelMesh({ panel }: { panel: Panel }) {
       <mesh
         ref={meshRef}
         position={position}
+        // Tag so the corner-pick tool can tell a panel apart from a corner dot
+        // when testing whether a corner is occluded by a panel in front.
+        userData={{ isPanel: true }}
         // A hidden panel is a ghost: it stays on screen (so it still reads as
         // part of the model and can guide snapping) but ignores the ray, so it
         // can't be clicked or dragged.

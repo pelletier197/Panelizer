@@ -11,9 +11,9 @@ const KIND: Record<SnapKind, { color: string; label: string }> = {
   middle: { color: '#ffb02e', label: 'Middle' },
 }
 
-/** Tiny frame (mm) around the panel face so the guide hugs the shape rather
- *  than floating well outside it, while staying a hair clear of the edge. */
-const PAD_MM = 4
+/** The guide is drawn on the exact contact rectangle (no outward padding) so it
+ *  marks precisely where the two panels meet. */
+const PAD_MM = 0
 
 /**
  * Live snap guides drawn during a move drag. Each hint is a rectangle lying in

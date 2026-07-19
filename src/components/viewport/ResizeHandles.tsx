@@ -3,8 +3,9 @@ import { Vector3 } from 'three'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, axisField, panelBoxSize } from '../../lib/geometry'
+import { roundToUnitGrid } from '../../lib/units'
 import { resizeAlongAxis } from '../../lib/resize'
-import { SNAP_THRESHOLD_MM, snapResizeFace } from '../../lib/snapping'
+import { SNAP_THRESHOLD_MM, snapResizeFace, type SnapHitTarget } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
 
 type Axis3 = 0 | 1 | 2
@@ -63,6 +64,7 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   const setGestureEditable = useDesignStore((s) => s.setGestureEditable)
   const clearGesture = useDesignStore((s) => s.clearGesture)
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
+  const unit = useDesignStore((s) => s.unit)
   const panels = useDesignStore((s) => s.panels)
   const others = panels.filter((p) => p.id !== panel.id)
   const invalidate = useThree((s) => s.invalidate)
@@ -110,13 +112,20 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     return snapResizeFace(drag.current.panel, axis, faceSign, raw, others, SNAP_THRESHOLD_MM)
   }
 
-  // Show (or clear) the snap guide for a resize snap, framing it on the face's
-  // plane so it lines up with the moving edge.
-  const showSnap = (snap: { plane: number; kind: 'butt' | 'middle' } | null) => {
+  // Show (or clear) the snap guide, drawn on the contact rectangle (the overlap
+  // of the two panels) so it marks only where the faces meet.
+  const showSnap = (snap: SnapHitTarget | null) => {
     if (!snap) return setSnapHints([])
-    const at: [number, number, number] = [...panel.position]
-    at[axis] = snap.plane
-    setSnapHints([{ axis, kind: snap.kind, at, size: panelBoxSize(panel) }])
+    const at: [number, number, number] = [0, 0, 0]
+    const size: [number, number, number] = [0, 0, 0]
+    for (const k of [0, 1, 2] as const) {
+      if (k === axis) at[k] = snap.plane
+      else {
+        at[k] = (snap.lo[k] + snap.hi[k]) / 2
+        size[k] = Math.max(0, snap.hi[k] - snap.lo[k])
+      }
+    }
+    setSnapHints([{ axis, kind: snap.kind, at, size }])
   }
 
   const label = axisField(panel.normal, axis) === 'length' ? 'Length' : 'Width'
@@ -126,7 +135,10 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     const result = resizeAlongAxis(startPanel, axis, faceSign, deltaMm, symmetric)
     if (!result) return
     const patch = commit
-      ? { [result.field]: Math.round(result.value), position: result.position.map(Math.round) as [number, number, number] }
+      ? {
+          [result.field]: roundToUnitGrid(result.value, unit),
+          position: result.position.map((v) => roundToUnitGrid(v, unit)) as [number, number, number],
+        }
       : { [result.field]: result.value, position: result.position }
     ;(commit ? updatePanel : resizePanelLive)(panel.id, patch)
   }

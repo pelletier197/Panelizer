@@ -68,9 +68,20 @@ export type SnapKind = 'butt' | 'middle'
  *  with a neighbour both faces satisfy the *same* correction, so both are
  *  reported (and highlighted) at once instead of the guide flicking between
  *  them. */
+/** One highlighted target: the snapped plane, its kind, and the *contact
+ *  rectangle* — the axis-aligned overlap (mm) of the two panels. On the snap
+ *  axis the overlap is degenerate; the viewport draws the guide from the other
+ *  two axes so it marks only where the faces actually meet, not the whole face. */
+export interface SnapHitTarget {
+  plane: number
+  kind: SnapKind
+  lo: [number, number, number]
+  hi: [number, number, number]
+}
+
 export interface AxisSnap {
   correction: number
-  hits: { plane: number; kind: SnapKind }[]
+  hits: SnapHitTarget[]
 }
 
 /** Result of {@link snapGroupDelta}: a per-axis correction plus, for each axis,
@@ -130,7 +141,7 @@ export function snapGroupDelta(
     //  - Outside → offer the butt (our near face onto their near face).
     // Middle stays available while overlapping, so co-centring parallel faces
     // works. Nearest correction wins; every target sharing it is highlighted.
-    const cands: { corr: number; plane: number; kind: SnapKind }[] = []
+    const cands: (SnapHitTarget & { corr: number })[] = []
 
     for (const m of members) {
       const mSize = panelBoxSize(m.panel)
@@ -148,19 +159,24 @@ export function snapGroupDelta(
         const nMax = n.max[axis]
         const nCentre = (nMin + nMax) / 2
 
+        // The contact rectangle: where the two boxes overlap on every axis. The
+        // guide is drawn from this (minus the snap axis) so it marks only the
+        // patch where the faces meet, not the whole dragged face.
+        const lo = [0, 1, 2].map((i) => Math.max(m.position[i] - mSize[i] / 2, n.min[i])) as [number, number, number]
+        const hi = [0, 1, 2].map((i) => Math.min(m.position[i] + mSize[i] / 2, n.max[i])) as [number, number, number]
+        const at = (corr: number, plane: number, kind: SnapKind) => cands.push({ corr, plane, kind, lo, hi })
+
         if (min < nMax && max > nMin) {
-          cands.push({ corr: nMin - min, plane: nMin, kind: 'butt' }) // align low edges
-          cands.push({ corr: nMax - max, plane: nMax, kind: 'butt' }) // align high edges
+          at(nMin - min, nMin, 'butt') // align low edges
+          at(nMax - max, nMax, 'butt') // align high edges
           // Only co-centre against a neighbour whose *thickness* runs along this
           // axis (its face is perpendicular to the drag): that centre is a real
           // mid-thickness reference. Skip panels that merely span the axis — the
           // centre of a shelf's width isn't something to snap to.
-          if (axis === n.thinAxis) {
-            cands.push({ corr: nCentre - centre, plane: nCentre, kind: 'middle' })
-          }
+          if (axis === n.thinAxis) at(nCentre - centre, nCentre, 'middle')
         } else {
-          cands.push({ corr: nMax - min, plane: nMax, kind: 'butt' }) // our min butts their max
-          cands.push({ corr: nMin - max, plane: nMin, kind: 'butt' }) // our max butts their min
+          at(nMax - min, nMax, 'butt') // our min butts their max
+          at(nMin - max, nMin, 'butt') // our max butts their min
         }
       }
     }
@@ -178,14 +194,14 @@ export function snapGroupDelta(
     // though the magnet can only pull it to the nearer one). Deduped by plane.
     const CONTACT_TOL = 1.5
     const seen = new Set<number>()
-    const hits: { plane: number; kind: SnapKind }[] = []
+    const hits: SnapHitTarget[] = []
     for (const c of cands) {
       if (Math.abs(c.corr) >= threshold) continue
       if (Math.abs(c.corr - win.corr) > 0.5 && Math.abs(c.corr) > CONTACT_TOL) continue
       const key = Math.round(c.plane)
       if (seen.has(key)) continue
       seen.add(key)
-      hits.push({ plane: c.plane, kind: c.kind })
+      hits.push({ plane: c.plane, kind: c.kind, lo: c.lo, hi: c.hi })
     }
 
     correction[axis] = win.corr
@@ -196,10 +212,11 @@ export function snapGroupDelta(
 }
 
 /** Result of {@link snapResizeFace}: the (possibly snapped) face delta plus the
- *  winning target for display, or null when nothing was within threshold. */
+ *  winning target for display (with its contact rectangle), or null when nothing
+ *  was within threshold. */
 export interface FaceSnap {
   delta: number
-  snap: { plane: number; kind: SnapKind } | null
+  snap: SnapHitTarget | null
 }
 
 /**
@@ -231,11 +248,15 @@ export function snapResizeFace(
   // reference). Faces and centre compete as peers so the centre snap actually
   // shows as the edge nears it (tiering hid it behind the ever-closer face).
   let best = threshold
-  let winner: (FaceSnap['snap'] & { delta: number }) | null = null
+  let winner: { delta: number; snap: SnapHitTarget } | null = null
   for (const other of others) {
     const b = withThinAxis(panelBounds(other))
     // Only snap to neighbours the resized face actually spans in-plane.
     if (!overlapsPerpendicular(panel.position, size, b, axis)) continue
+    // Contact rectangle: the panel-vs-neighbour overlap, so the guide marks only
+    // where they meet. On the resize axis it's pinned to the snapped plane below.
+    const lo = [0, 1, 2].map((i) => Math.max(panel.position[i] - size[i] / 2, b.min[i])) as [number, number, number]
+    const hi = [0, 1, 2].map((i) => Math.min(panel.position[i] + size[i] / 2, b.max[i])) as [number, number, number]
     const targets: [number, SnapKind][] = [
       [b.min[axis], 'butt'],
       [b.max[axis], 'butt'],
@@ -245,9 +266,8 @@ export function snapResizeFace(
       const distance = Math.abs(faceNow - plane)
       if (distance >= best) continue
       best = distance
-      winner = { plane, kind, delta: plane - faceStart }
+      winner = { delta: plane - faceStart, snap: { plane, kind, lo, hi } }
     }
   }
-  if (winner) return { delta: winner.delta, snap: { plane: winner.plane, kind: winner.kind } }
-  return { delta: rawDelta, snap: null }
+  return winner ?? { delta: rawDelta, snap: null }
 }
