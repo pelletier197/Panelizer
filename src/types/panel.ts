@@ -1,3 +1,5 @@
+import type { Unit } from '../lib/units'
+
 /** Axis along which a panel's thickness runs. The panel's face lies in the
  *  plane of the other two axes. World convention: Y is up (height), Z is depth. */
 export type Axis = 'x' | 'y' | 'z'
@@ -41,7 +43,15 @@ export interface Panel {
    *  can't be clicked or dragged in the viewport. Toggled from the parts list.
    *  Absent/false means it's a normal, solid, clickable panel. */
   hidden?: boolean
+  /** The unit each dimension/position was entered in, so a value typed in mm
+   *  keeps displaying in mm (never an inch approximation) and vice-versa.
+   *  Geometry is always stored in mm; this only governs display. A field with no
+   *  entry here follows the document's default unit. */
+  displayUnits?: Partial<Record<MeasureField, Unit>>
 }
+
+/** The measurement fields whose display unit can be remembered per panel. */
+export type MeasureField = 'length' | 'width' | 'thickness' | 'x' | 'y' | 'z'
 
 /** Woodworking default: grain runs along the longer face edge. Ties go to
  *  length. */

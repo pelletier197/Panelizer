@@ -45,6 +45,7 @@ export function Toolbar() {
   const setTool = useDesignStore((s) => s.setTool)
   const addPanel = useDesignStore((s) => s.addPanel)
   const loadDesign = useDesignStore((s) => s.loadDesign)
+  const fixPrecision = useDesignStore((s) => s.fixPrecision)
   const clear = useDesignStore((s) => s.clear)
   const fileInput = useRef<HTMLInputElement>(null)
   const empty = panels.length === 0
@@ -174,6 +175,19 @@ export function Toolbar() {
               }}
             >
               Import…
+            </button>
+
+            <div className="menu__divider" />
+
+            <button
+              className="menu__item"
+              disabled={empty}
+              onClick={() => {
+                fixPrecision()
+                close()
+              }}
+            >
+              Fix precision
             </button>
 
             <div className="menu__divider" />

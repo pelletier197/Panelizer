@@ -1,4 +1,5 @@
-import type { Axis } from '../../types/panel'
+import type { Axis, MeasureField } from '../../types/panel'
+import type { Unit } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 import { MeasurementInput } from '../ui/MeasurementInput'
 

@@ -6,6 +6,7 @@ import type { Material } from '../lib/materials'
 import type { Stock } from '../lib/stock'
 import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
+import { repairPrecision } from '../lib/repair'
 import { createMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
 import { loadFromStorage, saveToStorage } from '../lib/persistence'
@@ -155,6 +156,9 @@ interface DesignState {
   removeStock: (id: string) => void
 
   setUnit: (unit: Unit) => void
+  /** Heal imperial drift: snap every thickness to an exact unit-grid fraction and
+   *  close hairline gaps at joints so parts add up exactly. One undo step. */
+  fixPrecision: () => void
   setKerf: (mm: number) => void
   setMargin: (mm: number) => void
   loadDesign: (design: Design) => void
@@ -432,6 +436,11 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
 
     setUnit: (unit) => commit({ unit }),
+
+    fixPrecision: () => {
+      const { panels, unit } = get()
+      if (panels.length > 0) commit({ panels: repairPrecision(panels, unit) })
+    },
     setKerf: (kerf) => commit({ kerf: Math.max(0, kerf) }),
     setMargin: (margin) => commit({ margin: Math.max(0, margin) }),
 
