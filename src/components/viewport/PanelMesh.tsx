@@ -4,7 +4,6 @@ import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, panelBoxSize } from '../../lib/geometry'
 import { findMaterial } from '../../lib/materials'
-import { roundToUnitGrid } from '../../lib/units'
 import { SNAP_THRESHOLD_MM, snapGroupDelta } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
 import { ResizeHandles } from './ResizeHandles'
@@ -50,7 +49,6 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
   const panels = useDesignStore((s) => s.panels)
   const tool = useDesignStore((s) => s.tool)
-  const unit = useDesignStore((s) => s.unit)
   const color = useDesignStore((s) => findMaterial(s.materials, panel.materialId).color)
 
   const hidden = panel.hidden === true
@@ -83,10 +81,11 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   // frame.
   const commitMoved = () => {
     const s = useDesignStore.getState()
+    // Commit the exact live positions — no re-quantizing. Snapping already
+    // landed panels on precise contact planes; rounding each coordinate
+    // independently would nudge snapped joints apart (small gaps that add up).
     commitPanelsMove(
-      s.panels
-        .filter((p) => s.selectedIds.includes(p.id))
-        .map((p) => ({ id: p.id, position: p.position.map((v) => roundToUnitGrid(v, unit)) as Vec3 })),
+      s.panels.filter((p) => s.selectedIds.includes(p.id)).map((p) => ({ id: p.id, position: p.position })),
     )
   }
 

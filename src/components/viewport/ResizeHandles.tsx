@@ -3,7 +3,6 @@ import { Vector3 } from 'three'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, axisField, panelBoxSize } from '../../lib/geometry'
-import { roundToUnitGrid } from '../../lib/units'
 import { resizeAlongAxis } from '../../lib/resize'
 import { SNAP_THRESHOLD_MM, snapResizeFace, type SnapHitTarget } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
@@ -64,7 +63,6 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   const setGestureEditable = useDesignStore((s) => s.setGestureEditable)
   const clearGesture = useDesignStore((s) => s.clearGesture)
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
-  const unit = useDesignStore((s) => s.unit)
   const panels = useDesignStore((s) => s.panels)
   const others = panels.filter((p) => p.id !== panel.id)
   const invalidate = useThree((s) => s.invalidate)
@@ -134,12 +132,9 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   const applyFrom = (startPanel: Panel, deltaMm: number, symmetric: boolean, commit: boolean) => {
     const result = resizeAlongAxis(startPanel, axis, faceSign, deltaMm, symmetric)
     if (!result) return
-    const patch = commit
-      ? {
-          [result.field]: roundToUnitGrid(result.value, unit),
-          position: result.position.map((v) => roundToUnitGrid(v, unit)) as [number, number, number],
-        }
-      : { [result.field]: result.value, position: result.position }
+    // Exact value — no grid rounding. A face snapped to a neighbour must stay
+    // exactly on it, or the joint opens a hairline gap.
+    const patch = { [result.field]: result.value, position: result.position }
     ;(commit ? updatePanel : resizePanelLive)(panel.id, patch)
   }
 

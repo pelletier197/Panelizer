@@ -38,20 +38,6 @@ export function toMm(value: number, unit: Unit): number {
   return value * MM_PER_UNIT[unit]
 }
 
-/** The natural rounding step (mm) for each unit — the resolution a value snaps
- *  to when committed. Imperial rounds to 1/16", the shop-standard increment (and
- *  the display resolution); metric rounds to 1 mm. Rounding drag/snap results to
- *  this grid instead of a whole millimetre keeps inch dimensions from drifting
- *  off the 1/16" grid (a 1 mm rounding is ~0.63 of a 1/16", enough to flip the
- *  fraction shown). */
-const UNIT_GRID_MM: Record<Unit, number> = { mm: 1, cm: 1, inch: 25.4 / 16 }
-
-/** Round a millimetre value to the active unit's grid (see {@link UNIT_GRID_MM}). */
-export function roundToUnitGrid(mm: number, unit: Unit): number {
-  const grid = UNIT_GRID_MM[unit]
-  return Math.round(mm / grid) * grid
-}
-
 /** Whether the document unit is imperial (inches), so defaults should be clean
  *  imperial sizes rather than clean metric ones. */
 export function isImperial(unit: Unit): boolean {

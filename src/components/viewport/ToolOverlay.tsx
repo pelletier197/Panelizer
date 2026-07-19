@@ -4,12 +4,10 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import { MM_TO_M } from '../../lib/geometry'
 import { distance, panelCorners, type Point } from '../../lib/corners'
-import { formatMeasurement, roundToUnitGrid, type Unit } from '../../lib/units'
+import { formatMeasurement } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 
 const toM = ([x, y, z]: Point): Point => [x * MM_TO_M, y * MM_TO_M, z * MM_TO_M]
-const roundToGrid = (p: Point, unit: Unit): Point =>
-  [roundToUnitGrid(p[0], unit), roundToUnitGrid(p[1], unit), roundToUnitGrid(p[2], unit)]
 
 const HIT_RADIUS = 0.03 // invisible click target (m)
 const DOT_RADIUS = 0.004 // visible dot (m); grows on hover / selection
@@ -113,15 +111,14 @@ export function ToolOverlay() {
     if (tool === 'move-snap') {
       const panel = panels.find((p) => p.id === pick.panelId)
       if (panel) {
+        // Exact translation so the picked corners coincide precisely — no
+        // rounding, which would leave them a hair apart.
         updatePanel(panel.id, {
-          position: roundToGrid(
-            [
-              panel.position[0] + (point[0] - pick.point[0]),
-              panel.position[1] + (point[1] - pick.point[1]),
-              panel.position[2] + (point[2] - pick.point[2]),
-            ],
-            unit,
-          ),
+          position: [
+            panel.position[0] + (point[0] - pick.point[0]),
+            panel.position[1] + (point[1] - pick.point[1]),
+            panel.position[2] + (point[2] - pick.point[2]),
+          ],
         })
       }
     } else {
