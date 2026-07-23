@@ -190,15 +190,18 @@ export function snapGroupDelta(
 
     // Highlight every target either sharing the winning correction (flush shows
     // both faces + centre together) OR one the panel is already essentially on
-    // (so a part nestled between two neighbours lights up BOTH butts, even
-    // though the magnet can only pull it to the nearer one). Deduped by plane.
+    // (so a part nestled between two neighbours lights up BOTH butts). Dedupe by
+    // plane AND contact rectangle, so several panels meeting the SAME plane (e.g.
+    // a side butting the ends of two rails + the bottom) each light up — a
+    // plane-only key would collapse them into one.
     const CONTACT_TOL = 1.5
-    const seen = new Set<number>()
+    const seen = new Set<string>()
     const hits: SnapHitTarget[] = []
     for (const c of cands) {
       if (Math.abs(c.corr) >= threshold) continue
       if (Math.abs(c.corr - win.corr) > 0.5 && Math.abs(c.corr) > CONTACT_TOL) continue
-      const key = Math.round(c.plane)
+      const r = (v: number) => Math.round(v)
+      const key = `${r(c.plane)}|${c.lo.map(r).join(',')}|${c.hi.map(r).join(',')}`
       if (seen.has(key)) continue
       seen.add(key)
       hits.push({ plane: c.plane, kind: c.kind, lo: c.lo, hi: c.hi })
