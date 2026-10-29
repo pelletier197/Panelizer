@@ -8,7 +8,7 @@ import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
 import type { PanelPatch } from '../lib/resize'
-import { createMaterial } from '../lib/materials'
+import { createMaterial, findMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
 import { loadFromStorage, saveToStorage } from '../lib/persistence'
 
@@ -18,6 +18,9 @@ import { loadFromStorage, saveToStorage } from '../lib/persistence'
 export type Tool = 'move' | 'move-snap' | 'resize' | 'measure'
 
 type Point = [number, number, number]
+
+/** How a box-select combines with the existing selection. */
+export type BoxSelectOp = 'add' | 'remove' | 'replace'
 
 /**
  * A live move/resize gesture, surfaced in the corner readout HUD. While the
@@ -53,6 +56,10 @@ const pickDesign = (s: Design): Design => ({
   margin: s.margin,
 })
 
+/** How far (mm, along X) a duplicate or paste lands from its source, so the
+ *  copy doesn't hide exactly behind the original. */
+const COPY_OFFSET = 30
+
 /** How many undo steps to keep. */
 const HISTORY_LIMIT = 100
 
@@ -77,19 +84,18 @@ interface DesignState extends Design {
   /** Whether orbit navigation is live. Resize handles switch this off while
    *  the pointer is on them so a face-drag never spins the camera. */
   orbitEnabled: boolean
-  /** Left-drag behaviour in the viewport: `orbit` spins the camera (default),
-   *  `select` draws a rubber-band box that selects the panels it covers.
-   *  Toggled from the corner control in the viewport. Transient UI state. */
-  dragMode: 'orbit' | 'select'
-  setDragMode: (mode: 'orbit' | 'select') => void
-  /** A completed marquee rectangle (canvas pixels) handed from the DOM overlay
-   *  to the in-canvas picker, which projects panels against it and selects.
-   *  Cleared once consumed. */
-  marqueeBox: { x: number; y: number; w: number; h: number; additive: boolean } | null
-  setMarqueeBox: (box: DesignState['marqueeBox']) => void
-  /** Replace (or, when additive, extend) the selection with a set of ids —
-   *  used by the marquee box-select. */
-  selectInBox: (ids: string[], additive: boolean) => void
+  /** Panels the box-select being dragged would catch, lit in the viewport so
+   *  the result is visible before release. Empty when no box is open.
+   *  Transient UI state. */
+  boxPreview: string[]
+  setBoxPreview: (ids: string[]) => void
+  /** Whether Shift (the box-select key) is down. While it is, the move gizmo
+   *  stands aside so a Shift+drag always draws a box. Transient UI state. */
+  boxKeyHeld: boolean
+  setBoxKeyHeld: (held: boolean) => void
+  /** Apply a box-select: `add` the caught panels to the selection, `remove`
+   *  them from it, or `replace` it. Hidden panels are never selected. */
+  selectInBox: (ids: string[], op: BoxSelectOp) => void
   /** Select every visible panel. */
   selectAll: () => void
   /** Swap the selection for every visible panel that isn't in it. */
@@ -129,8 +135,6 @@ interface DesignState extends Design {
   updatePanel: (id: string, patch: Partial<Panel>) => void
   /** Apply the same patch to several panels in one undo step. */
   updatePanels: (ids: string[], patch: Partial<Panel>) => void
-  /** Move every selected panel by `mm` along one axis, as one undo step. */
-  nudgeSelection: (axis: 0 | 1 | 2, mm: number) => void
   movePanelLive: (id: string, position: [number, number, number]) => void
   /** Live (non-persisted) move of several panels at once — the group drag. */
   movePanelsLive: (moves: { id: string; position: [number, number, number] }[]) => void
@@ -153,6 +157,16 @@ interface DesignState extends Design {
   /** Copy panels (offset so they don't hide the originals) and select the
    *  copies, in one undo step. */
   duplicatePanels: (ids: string[]) => void
+  /** Panels copied with Ctrl+C, as they were at copy time. In-app only (not
+   *  the system clipboard), transient, and never undone. */
+  clipboard: Panel[]
+  /** How many times the clipboard has been pasted, so each paste lands one
+   *  step further out instead of stacking on the previous one. */
+  pasteCount: number
+  /** Copy the selection to the clipboard. */
+  copySelection: () => void
+  /** Add offset copies of the clipboard and select them, in one undo step. */
+  paste: () => void
   select: (id: string | null) => void
   /** Select from a click in the 3D scene — no-ops once if a resize drag just
    *  armed suppression, so releasing a handle doesn't select the panel under it.
@@ -248,13 +262,30 @@ export const useDesignStore = create<DesignState>((set, get) => {
     return mapPanels(byId.keys(), (p) => ({ ...p, ...byId.get(p.id)! }))
   }
 
+  // Add fresh copies of `sources`, shifted along X by `offset` mm, and select
+  // them — one undo step. Shared by duplicate and paste. A copy whose material
+  // was deleted since it was copied falls back to the first material.
+  const addCopies = (sources: Panel[], offset: number) => {
+    if (sources.length === 0) return
+    const { materials } = get()
+    const copies = sources.map((source) =>
+      createPanel({
+        ...source,
+        name: `${source.name} copy`,
+        materialId: findMaterial(materials, source.materialId).id,
+        position: [source.position[0] + offset, source.position[1], source.position[2]],
+      }),
+    )
+    commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
+  }
+
   const visibleIds = () => get().panels.filter((p) => !p.hidden).map((p) => p.id)
 
   return {
     ...initial,
     selectedIds: [],
-    dragMode: 'orbit',
-    marqueeBox: null,
+    boxPreview: [],
+    boxKeyHeld: false,
     snapHints: [],
     gesture: null,
     tool: 'move',
@@ -266,6 +297,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
     dragOrigin: null,
     suppressSelect: false,
     cutlistOpen: false,
+    clipboard: [],
+    pasteCount: 0,
 
     setCutlistOpen: (cutlistOpen) => set({ cutlistOpen }),
 
@@ -299,18 +332,6 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     updatePanels: (ids, patch) => {
       if (ids.length > 0) commit({ panels: mapPanels(ids, (p) => ({ ...p, ...patch })) })
-    },
-
-    nudgeSelection: (axis, mm) => {
-      const { selectedIds } = get()
-      if (selectedIds.length === 0) return
-      commit({
-        panels: mapPanels(selectedIds, (p) => {
-          const position: Point = [...p.position]
-          position[axis] += mm
-          return { ...p, position }
-        }),
-      })
     },
 
     // Live position update during a drag: no autosave (the drop commits it),
@@ -355,6 +376,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
 
     setHidden: (ids, hidden) => {
+      if (ids.length === 0) return
       const targets = new Set(ids)
       commit({
         panels: mapPanels(targets, (p) => ({ ...p, hidden })),
@@ -366,22 +388,33 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     duplicatePanels: (ids) => {
       const wanted = new Set(ids)
-      const copies = get()
-        .panels.filter((p) => wanted.has(p.id))
-        .map((source) =>
-          createPanel({
-            ...source,
-            name: `${source.name} copy`,
-            position: [source.position[0] + 30, source.position[1], source.position[2]],
-          }),
-        )
-      if (copies.length === 0) return
-      commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
+      addCopies(get().panels.filter((p) => wanted.has(p.id)), COPY_OFFSET)
     },
 
-    // Leaving select mode drops any half-drawn marquee.
-    setDragMode: (dragMode) => set({ dragMode, marqueeBox: null }),
-    setMarqueeBox: (marqueeBox) => set({ marqueeBox }),
+    copySelection: () => {
+      const { panels, selectedIds } = get()
+      const chosen = new Set(selectedIds)
+      const clipboard = panels.filter((p) => chosen.has(p.id))
+      if (clipboard.length > 0) set({ clipboard, pasteCount: 0 })
+    },
+
+    paste: () => {
+      const { clipboard, pasteCount } = get()
+      if (clipboard.length === 0) return
+      addCopies(clipboard, COPY_OFFSET * (pasteCount + 1))
+      set({ pasteCount: pasteCount + 1 })
+    },
+
+    setBoxKeyHeld: (boxKeyHeld) => {
+      if (get().boxKeyHeld !== boxKeyHeld) set({ boxKeyHeld })
+    },
+
+    setBoxPreview: (boxPreview) => {
+      // Called on every pointer move; skip the re-render when nothing changed.
+      const current = get().boxPreview
+      if (current.length === boxPreview.length && current.every((id, i) => id === boxPreview[i])) return
+      set({ boxPreview })
+    },
 
     setSnapHints: (snapHints) => set({ snapHints }),
 
@@ -396,11 +429,17 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
     clearGesture: () => set({ gesture: null }),
 
-    selectInBox: (ids, additive) => {
+    selectInBox: (ids, op) => {
       // Same rule as a click: a ghosted panel can't be picked.
       const visible = new Set(visibleIds())
       const picked = ids.filter((id) => visible.has(id))
-      const selectedIds = additive ? Array.from(new Set([...get().selectedIds, ...picked])) : picked
+      const current = get().selectedIds
+      const selectedIds =
+        op === 'replace'
+          ? picked
+          : op === 'add'
+            ? Array.from(new Set([...current, ...picked]))
+            : current.filter((id) => !picked.includes(id))
       set({ selectedIds, dragOrigin: null })
     },
 

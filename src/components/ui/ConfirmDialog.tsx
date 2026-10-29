@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from './Button'
+import { cx } from './cx'
 import { registerConfirmHost, type PendingConfirm } from './useConfirm'
 
 /** Mount once, near the app root. Renders whichever confirmation is pending.
@@ -35,7 +36,10 @@ export function ConfirmHost() {
       onClick={() => settle(false)}
     >
       <div
-        className="flex max-h-full w-full max-w-md flex-col rounded-lg border border-edge bg-surface shadow-2xl"
+        className={cx(
+          'flex max-h-full w-full flex-col rounded-lg border border-edge bg-surface shadow-2xl',
+          request.wide ? 'max-w-4xl' : 'max-w-md',
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="m-0 shrink-0 border-b border-edge px-4 py-3 text-base font-semibold">

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useDesignStore, type Tool } from '../store/designStore'
-import { gridStepMm } from '../lib/units'
 import { useConfirm } from '../components/ui/useConfirm'
+import { frameView } from '../components/viewport/frameView'
 
 /** Whether a keystroke should be left to the focused field rather than treated
  *  as a global shortcut. */
@@ -23,58 +23,78 @@ const TOOL_KEYS = Object.fromEntries(
   Object.entries(TOOL_SHORTCUTS).map(([tool, key]) => [key, tool as Tool]),
 ) as Record<string, Tool>
 
-/** Arrow keys nudge along X (left/right) and Y (up/down); Alt turns up/down
- *  into Z (depth). Shift moves ten grid steps instead of one. */
-const NUDGES: Record<string, { axis: 0 | 1 | 2; sign: 1 | -1 }> = {
-  ArrowRight: { axis: 0, sign: 1 },
-  ArrowLeft: { axis: 0, sign: -1 },
-  ArrowUp: { axis: 1, sign: 1 },
-  ArrowDown: { axis: 1, sign: -1 },
-}
-
-/** The keymap as shown to the user. Kept beside the handler so the cheat sheet
- *  can't drift from what the keys actually do. */
-export const SHORTCUTS: { keys: string; action: string }[] = [
-  { keys: 'Ctrl+Z', action: 'Undo' },
-  { keys: 'Ctrl+Y / Ctrl+Shift+Z', action: 'Redo' },
-  { keys: 'Ctrl+A', action: 'Select all visible panels' },
-  { keys: 'Ctrl+I', action: 'Invert selection' },
-  { keys: 'Esc', action: 'Cancel the pick in progress, then deselect' },
-  { keys: 'Ctrl+D', action: 'Duplicate selection' },
-  { keys: 'Del / Backspace', action: 'Delete selection' },
-  { keys: '← → ↑ ↓', action: 'Nudge selection on X / Y by one grid step' },
-  { keys: 'Alt+↑ ↓', action: 'Nudge selection on Z' },
-  { keys: 'Shift + arrows', action: 'Nudge ten grid steps' },
-  { keys: '1 – 4', action: 'Move, Snap point, Resize, Measure' },
-  { keys: '?', action: 'Show this list' },
+/** The keymap as shown to the user, grouped. Kept beside the handler so the
+ *  cheat sheet can't drift from what the keys actually do. The mouse group
+ *  documents the viewport's pointer controls (orbit/pan/zoom come from
+ *  OrbitControls, box-select from BoxSelect) so they're discoverable too. */
+export const SHORTCUTS: { group: string; items: { keys: string; action: string }[] }[] = [
+  {
+    group: 'Mouse',
+    items: [
+      { keys: 'Drag', action: 'Orbit the camera' },
+      { keys: 'Middle / Right-drag', action: 'Pan the camera' },
+      { keys: 'Ctrl+drag', action: 'Pan the camera (trackpad)' },
+      { keys: 'Wheel', action: 'Zoom' },
+      { keys: 'Click', action: 'Select a panel (empty space deselects)' },
+      { keys: 'Shift+click', action: 'Add or remove a panel from the selection' },
+      { keys: 'Shift+drag', action: 'Box-select: add (→ fully inside, ← touching)' },
+      { keys: 'Ctrl+Shift+drag', action: 'Box-select: remove from the selection' },
+    ],
+  },
+  {
+    group: 'Keyboard',
+    items: [
+      { keys: 'Ctrl+Z', action: 'Undo (in the move/resize box: cancel that drag)' },
+      { keys: 'Ctrl+Y / Ctrl+Shift+Z', action: 'Redo' },
+      { keys: 'Ctrl+A', action: 'Select all visible panels' },
+      { keys: 'Ctrl+I', action: 'Invert selection' },
+      { keys: 'Esc', action: 'Cancel the pick in progress, then deselect' },
+      { keys: 'Ctrl+C / Ctrl+V', action: 'Copy selection / paste copies' },
+      { keys: 'Ctrl+D', action: 'Duplicate selection' },
+      { keys: 'Del / Backspace', action: 'Delete selection' },
+      { keys: 'F', action: 'Frame the selection (or the whole design)' },
+      { keys: 'H / Alt+H', action: 'Hide selection / show all hidden panels' },
+      { keys: '1 – 4', action: 'Move, Snap point, Resize, Measure' },
+      { keys: '?', action: 'Show this list' },
+    ],
+  },
 ]
 
-/** Opens the keyboard-shortcut list in a dialog — from `?` or the menu. */
+/** Opens the shortcut list in a dialog — from `?` or the menu. */
 export function useCheatSheet() {
   const confirm = useConfirm()
   return () =>
     confirm({
-      title: 'Keyboard shortcuts',
+      title: 'Shortcuts',
       dismissOnly: true,
+      wide: true,
       confirmLabel: 'Close',
+      // One table per group, side by side when there's room, stacked otherwise.
       body: (
-        <table className="w-full border-collapse">
-          <tbody>
-            {SHORTCUTS.map((s) => (
-              <tr key={s.keys} className="border-b border-edge last:border-0">
-                <td className="py-1 pr-4 font-mono whitespace-nowrap text-ink">{s.keys}</td>
-                <td className="py-1">{s.action}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+          {SHORTCUTS.map(({ group, items }) => (
+            <section key={group}>
+              <h3 className="m-0 mb-1.5 text-xs font-semibold tracking-wide text-ink-dim uppercase">{group}</h3>
+              <table className="w-full border-collapse">
+                <tbody>
+                  {items.map((s) => (
+                    <tr key={s.keys} className="border-b border-edge last:border-0">
+                      <td className="py-1.5 pr-4 align-top font-mono whitespace-nowrap text-ink">{s.keys}</td>
+                      <td className="py-1.5">{s.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </div>
       ),
     })
 }
 
 /**
  * Every global keyboard shortcut, in one place. Skipped while a field has focus
- * (so text edits keep their own undo and arrows) and while a modal is open.
+ * (so text edits keep their own undo) and while a modal is open.
  * Handlers read the store at key time rather than subscribing — nothing here
  * needs to re-render.
  */
@@ -95,6 +115,11 @@ export function useShortcuts() {
           else if (key === 'a') store.selectAll()
           else if (key === 'i') store.invertSelection()
           else if (key === 'd') store.duplicatePanels(store.selectedIds)
+          // Copy/paste only take over when there's something of ours to act on,
+          // so copying selected page text still works as normal.
+          else if (key === 'c' && store.selectedIds.length > 0 && !window.getSelection()?.toString())
+            store.copySelection()
+          else if (key === 'v' && store.clipboard.length > 0) store.paste()
           else return false
           return true
         }
@@ -108,23 +133,24 @@ export function useShortcuts() {
           store.removePanels(store.selectedIds)
           return true
         }
+        // By physical key: Alt+H on a Mac types `˙`, not `h`.
+        if (e.code === 'KeyF') {
+          const chosen = new Set(store.selectedIds)
+          const selected = store.panels.filter((p) => chosen.has(p.id))
+          frameView(selected.length > 0 ? selected : store.panels)
+          return true
+        }
+        if (e.code === 'KeyH') {
+          if (e.altKey) store.setHidden(store.panels.filter((p) => p.hidden).map((p) => p.id), false)
+          else store.setHidden(store.selectedIds, true)
+          return true
+        }
         if (e.key === '?') {
           void showCheatSheet()
           return true
         }
         if (TOOL_KEYS[e.key] && !e.altKey) {
           store.setTool(TOOL_KEYS[e.key])
-          return true
-        }
-
-        const nudge = NUDGES[e.key]
-        // Don't nudge mid-gesture: the readout owns the live delta then.
-        if (nudge && store.selectedIds.length > 0 && !store.gesture) {
-          const axis = e.altKey && nudge.axis === 1 ? 2 : nudge.axis
-          // Screen "up" with Alt reads as "away from you", which is −Z.
-          const sign = axis === 2 ? -nudge.sign : nudge.sign
-          const step = gridStepMm(store.unit, store.precision) * (e.shiftKey ? 10 : 1)
-          store.nudgeSelection(axis, sign * step)
           return true
         }
         return false

@@ -152,6 +152,8 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   })
 
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
+    // Shift+press is always a box-select; leave it to BoxSelect.
+    if (e.nativeEvent.shiftKey) return
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture(e.pointerId)
     setOrbit(false)
@@ -202,11 +204,20 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     e.stopPropagation()
     ;(e.target as Element).releasePointerCapture(e.pointerId)
     const deltaMm = faceSnap(e.ray).delta
+    const startGroup = drag.current.group
     drag.current = null
     setOrbit(true)
     setSnapHints([]) // the guide belongs to the live drag only
-    if (Math.abs(deltaMm) >= CLICK_THRESHOLD_MM) gesture.keepForTyping()
-    else gesture.dismiss()
+    if (Math.abs(deltaMm) >= CLICK_THRESHOLD_MM) {
+      gesture.keepForTyping()
+    } else {
+      gesture.dismiss()
+      // Put back any sub-threshold wiggle and end the pending drag. Without
+      // this the store kept believing a drag was in progress: the next commit
+      // folded this "drag" into its undo step, and box-select (which backs off
+      // while a drag runs) stopped selecting anything.
+      restorePanels(resizeRestore(startGroup))
+    }
   }
 
   return (

@@ -73,12 +73,33 @@ describe('batch edits', () => {
     expect(byId(selectedIds[0]).position[0]).toBe(30)
   })
 
-  it('nudgeSelection moves the selection along one axis as one step', () => {
-    useDesignStore.setState({ selectedIds: ['a', 'b'] })
-    store().nudgeSelection(2, -5)
-    expect(byId('a').position).toEqual([0, 0, -5])
-    expect(byId('b').position).toEqual([0, 0, -5])
-    expect(store().past).toHaveLength(1)
+  it('paste adds offset copies of what was copied, one step further each time', () => {
+    useDesignStore.setState({ selectedIds: ['a'] })
+    store().copySelection()
+    store().paste()
+    const first = store().selectedIds
+    expect(first).toHaveLength(1)
+    expect(byId(first[0]).position[0]).toBe(30)
+
+    store().paste()
+    const second = store().selectedIds
+    expect(byId(second[0]).position[0]).toBe(60)
+    expect(store().panels).toHaveLength(5)
+    expect(store().past).toHaveLength(2)
+  })
+
+  it('paste uses the panels as they were when copied', () => {
+    useDesignStore.setState({ selectedIds: ['a'] })
+    store().copySelection()
+    store().updatePanel('a', { length: 999 })
+    store().paste()
+    expect(byId(store().selectedIds[0]).length).toBe(600)
+  })
+
+  it('paste with nothing copied does nothing', () => {
+    useDesignStore.setState({ clipboard: [] })
+    store().paste()
+    expect(store().past).toHaveLength(0)
   })
 
   it('removePanels drops panels and their selection together', () => {
@@ -102,14 +123,27 @@ describe('selection', () => {
   })
 
   it('selectInBox never picks a hidden panel', () => {
-    store().selectInBox(['b', 'c'], false)
+    store().selectInBox(['b', 'c'], 'replace')
     expect(store().selectedIds).toEqual(['b'])
   })
 
-  it('selectInBox extends the selection when additive', () => {
+  it('selectInBox adds to the selection', () => {
     useDesignStore.setState({ selectedIds: ['a'] })
-    store().selectInBox(['b'], true)
+    store().selectInBox(['a', 'b'], 'add')
     expect(store().selectedIds).toEqual(['a', 'b'])
+  })
+
+  it('selectInBox removes from the selection', () => {
+    useDesignStore.setState({ selectedIds: ['a', 'b'] })
+    store().selectInBox(['b', 'c'], 'remove')
+    expect(store().selectedIds).toEqual(['a'])
+  })
+
+  it('setBoxPreview skips an unchanged list', () => {
+    store().setBoxPreview(['a'])
+    const before = store().boxPreview
+    store().setBoxPreview(['a'])
+    expect(store().boxPreview).toBe(before)
   })
 })
 

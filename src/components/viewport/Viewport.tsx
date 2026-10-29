@@ -1,16 +1,20 @@
+import { MOUSE } from 'three'
 import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import { useDesignStore } from '../../store/designStore'
 import { Scene } from './Scene'
-import { MarqueePicker } from './MarqueePicker'
+import { BoxSelect } from './BoxSelect'
+import { CameraFramer } from './CameraFramer'
+
+const MOUSE_BUTTONS = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN }
 import { palette } from './palette'
 
 /** The 3D workspace: lighting, a reference floor grid, orbit navigation, an
- *  orientation gizmo, and the cabinet scene. Clicking empty space deselects. */
+ *  orientation gizmo, and the cabinet scene. Clicking empty space deselects;
+ *  Shift+drag box-selects (see BoxSelect). */
 export function Viewport() {
   const select = useDesignStore((s) => s.select)
   const orbitEnabled = useDesignStore((s) => s.orbitEnabled)
-  const dragMode = useDesignStore((s) => s.dragMode)
   const paint = palette()
 
   return (
@@ -18,7 +22,7 @@ export function Viewport() {
       frameloop="demand"
       camera={{ position: [1.2, 1, 1.6], fov: 45 }}
       // Click on empty space clears the selection. This is a click (not a drag),
-      // so a marquee box-drag never triggers it — the two don't collide.
+      // so a box-select drag never triggers it — the two don't collide.
       onPointerMissed={() => select(null)}
     >
       <color attach="background" args={[paint.scene]} />
@@ -38,9 +42,12 @@ export function Viewport() {
       />
 
       <Scene />
-      <MarqueePicker />
+      <BoxSelect />
+      <CameraFramer />
 
-      <OrbitControls makeDefault enabled={orbitEnabled && dragMode === 'orbit'} />
+      {/* Middle-drag pans (CAD convention) rather than OrbitControls' default
+          dolly — the wheel already zooms. Ctrl+drag and right-drag pan too. */}
+      <OrbitControls makeDefault enabled={orbitEnabled} mouseButtons={MOUSE_BUTTONS} />
       <GizmoHelper alignment="bottom-right" margin={[70, 70]}>
         <GizmoViewport labelColor="white" axisHeadScale={1} />
       </GizmoHelper>

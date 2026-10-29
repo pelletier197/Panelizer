@@ -278,7 +278,7 @@ export function Toolbar() {
                   void showCheatSheet()
                 }}
               >
-                Keyboard shortcuts (?)
+                Shortcuts &amp; mouse controls (?)
               </MenuItem>
 
               {DIVIDER}

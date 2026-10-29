@@ -43,6 +43,10 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   const selected = useDesignStore((s) => s.selectedIds.includes(panel.id))
   // The last-selected panel carries the move gizmo for the whole group.
   const isPrimary = useDesignStore((s) => s.selectedIds[s.selectedIds.length - 1] === panel.id)
+  // Caught by the box-select being dragged — a lighter version of the selected look.
+  const previewed = useDesignStore((s) => s.boxPreview.includes(panel.id))
+  // Shift means box-select; the gizmo stands aside so it can't grab the press.
+  const boxKeyHeld = useDesignStore((s) => s.boxKeyHeld)
   const sceneSelect = useDesignStore((s) => s.sceneSelect)
   const movePanelsLive = useDesignStore((s) => s.movePanelsLive)
   const commitPanelsMove = useDesignStore((s) => s.commitPanelsMove)
@@ -249,12 +253,12 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
           transparent={hidden}
           opacity={hidden ? 0.2 : 1}
           depthWrite={!hidden}
-          emissive={selected ? paint.accent : paint.none}
-          emissiveIntensity={selected ? 0.35 : 0}
+          emissive={selected || previewed ? paint.accent : paint.none}
+          emissiveIntensity={selected ? 0.35 : previewed ? 0.2 : 0}
         />
         <Edges
           threshold={15}
-          color={selected ? paint.accent : hidden ? paint.ghostEdge : paint.panelEdge}
+          color={selected || previewed ? paint.accent : hidden ? paint.ghostEdge : paint.panelEdge}
         />
       </mesh>
 
@@ -262,6 +266,7 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
         <TransformControls
           object={meshRef}
           mode="translate"
+          enabled={!boxKeyHeld}
           onMouseDown={beginDrag}
           onObjectChange={dragGroup}
           onMouseUp={endDrag}

@@ -15,21 +15,14 @@ break it are in [Not doing](#not-doing) with the reason.
 
 Done: the batch primitive (`updatePanels`, one undo step), a multi-select
 inspector (material, orientation, face size and thickness, with differing values
-shown as `Mixed`), duplicating a whole selection, and `Ctrl+A` / `Ctrl+I` / `Esc`.
-Still open:
+shown as `Mixed`), duplicating a whole selection, `Ctrl+A` / `Ctrl+I` / `Esc`, and
+modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
+encloses, right→left touches, with a live preview). Still open:
 
 - **Batch rotate / mirror.** Come from §2 and are group-aware for free if they
   pivot on the selection bounding box.
 - **Align and distribute.** Align faces on an axis, space evenly. Shares its math
   with the array tool (§6).
-- **Marquee fixes.** Two remaining problems in the box-select (it no longer
-  picks hidden panels):
-  - It hides behind a mode toggle — `dragMode` has to be flipped orbit→select and
-    back (`ViewportControls`). A drag on empty space should just box.
-  - It is a *touch* test, not an *enclose* test (`MarqueePicker`): any panel whose
-    screen-space bounding box merely intersects the marquee is selected, and that
-    box is large for a panel seen at an angle. Enclose by default, touch on a
-    modifier.
 - **Select similar** (same material / same size / same part group).
 - **Parts list wiring.** A group row click calls `select(id)` and *cycles one
   panel at a time*, so clicking a quantity-4 row selects one panel. Row click
@@ -84,9 +77,9 @@ the left side of a cabinet, mirror it to the right.
 
 ## 3. Keyboard shortcuts
 
-Mostly done: the keymap lives in `hooks/useShortcuts.tsx` (`?` lists it). Still
-missing: `F` to frame the selection (needs camera access from §4), and `R` /
-`Shift+R` once rotation (§2) exists.
+Done: the keymap lives in `hooks/useShortcuts.tsx` (`?` lists it, mouse
+controls included), with `F` to frame and `H` / `Alt+H` to hide and show. Still
+missing: `R` / `Shift+R` once rotation (§2) exists.
 
 ## 4. Camera views and orthographic mode
 

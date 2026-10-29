@@ -51,8 +51,8 @@ export function PropertiesPanel() {
     return (
       <Section title="Panel">
         <Hint>
-          Select a panel to edit its dimensions, material, and position. Shift+click to select several,
-          Ctrl+A for all.
+          Select a panel to edit its dimensions, material, and position. Shift+click or Shift+drag a box
+          to select several, Ctrl+A for all.
         </Hint>
       </Section>
     )
@@ -159,7 +159,7 @@ export function PropertiesPanel() {
           <MeasurementInput label="Z" value={single.position[2]} unit={unit} precision={precision} snap onChange={(v) => setPosition(single, 2, v)} />
         </FieldGroup>
       ) : (
-        <Hint>Drag any handle to move them together, or nudge with the arrow keys.</Hint>
+        <Hint>Drag any handle to move or resize them together.</Hint>
       )}
     </Section>
   )

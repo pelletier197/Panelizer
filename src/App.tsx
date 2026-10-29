@@ -4,7 +4,6 @@ import { MaterialsPanel } from './components/panels/MaterialsPanel'
 import { PartsPanel } from './components/panels/PartsPanel'
 import { CutlistModal } from './components/panels/CutlistModal'
 import { Viewport } from './components/viewport/Viewport'
-import { ViewportControls } from './components/viewport/ViewportControls'
 import { GestureReadout } from './components/viewport/GestureReadout'
 import { WebGLUnavailable } from './components/viewport/WebGLUnavailable'
 import { ResizableSidebar } from './components/layout/ResizableSidebar'
@@ -27,7 +26,6 @@ export default function App() {
           {hasWebGL() ? (
             <>
               <Viewport />
-              <ViewportControls />
               <GestureReadout />
             </>
           ) : (
