@@ -32,8 +32,8 @@ function shared<T>(panels: Panel[], read: (p: Panel) => T): T | undefined {
 }
 
 /** Editor for the selection. A single panel shows every field; several panels
- *  show the fields that make sense in bulk (material, orientation, face size,
- *  thickness), with a differing value shown as `Mixed` and an edit applied to
+ *  show the fields that make sense in bulk (name, material, orientation, face
+ *  size, thickness), with a differing value shown as `Mixed` and an edit applied to
  *  all of them in one undo step. Thickness lives here on purpose — it is the
  *  one dimension the viewport won't let you drag. */
 export function PropertiesPanel() {
@@ -62,6 +62,7 @@ export function PropertiesPanel() {
   const single = selected.length === 1 ? selected[0] : null
   const update = (patch: Partial<Panel>) => updatePanels(ids, patch)
 
+  const name = shared(selected, (p) => p.name)
   const material = shared(selected, (p) => p.materialId)
   const normal = shared(selected, (p) => p.normal)
   const length = shared(selected, (p) => p.length)
@@ -101,16 +102,17 @@ export function PropertiesPanel() {
         </div>
       }
     >
-      {single && (
-        <Field label="Name">
-          <input
-            type="text"
-            className={CONTROL}
-            value={single.name}
-            onChange={(e) => update({ name: e.target.value })}
-          />
-        </Field>
-      )}
+      {/* With several panels, typing names them all (e.g. a run of shelves);
+          differing names show as a `Mixed` placeholder until then. */}
+      <Field label="Name">
+        <input
+          type="text"
+          className={CONTROL}
+          value={name ?? ''}
+          placeholder={name === undefined ? 'Mixed' : undefined}
+          onChange={(e) => update({ name: e.target.value })}
+        />
+      </Field>
 
       <SelectField
         label="Material"

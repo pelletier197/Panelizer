@@ -35,8 +35,10 @@ export function StockList({ unit, precision }: { unit: Unit; precision: number }
   return (
     <>
       <Section title="Settings">
-        <MeasurementInput label="Kerf" value={kerf} unit={unit} precision={precision} min={0} snap onChange={setKerf} />
-        <MeasurementInput label="Margin" value={margin} unit={unit} precision={precision} min={0} snap onChange={setMargin} />
+        {/* Not snapped to the working grid: blades and trims come in sizes
+            like 2.6 mm that a 1 mm (or 1/16") grid would round away. */}
+        <MeasurementInput label="Kerf" value={kerf} unit={unit} precision={precision} min={0} onChange={setKerf} />
+        <MeasurementInput label="Margin" value={margin} unit={unit} precision={precision} min={0} onChange={setMargin} />
       </Section>
 
       <Section

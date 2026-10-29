@@ -112,9 +112,10 @@ export interface EvalResult {
  *   `+3`               → current value + 3
  *   `600/2`            → 300      (`*` / `/` take a plain scalar)
  *   `23 3/4 + 1/2 in`  → mixed units, result kept in the box's unit
+ *   `25 5/8 - 3 * 1/2` → 24 1/8 (`*` / `/` before `+` / `-`)
  *
- * Evaluation is strictly left to right (no precedence) — a field calculator,
- * not a full expression engine. Returns `null` if anything fails to parse.
+ * Usual precedence, no parentheses — a field calculator, not a full expression
+ * engine. Returns `null` if anything fails to parse.
  */
 export function evaluateMeasurement(raw: string, currentMm: number, defaultUnit: Unit): EvalResult | null {
   const text = normalizeFractions(raw).trim()
@@ -180,43 +181,49 @@ function tokenize(padded: string): Token[] {
 }
 
 /**
- * Fold a token sequence strictly left to right (no precedence). A leading
+ * Evaluate a token sequence with the usual precedence: `*` and `/` bind
+ * tighter than `+` and `-`, so `25 5/8 - 3 * 1/2` is `25 5/8 - 1 1/2`. Each
+ * product starts from a measurement and is scaled by plain numbers. A leading
  * operator starts from `currentMm`, the box's existing value, so `+3` adds to
- * what's already there. Returns null if any operand fails to parse.
+ * what's already there and `/2` halves it. Returns null if any operand fails to
+ * parse.
  */
 function foldExpression(tokens: Token[], currentMm: number, defaultUnit: Unit): number | null {
-  const first = tokens[0]
-  let acc: number
-  let i: number
+  let i = 0
 
-  if ('op' in first) {
-    acc = currentMm
-    i = 0
-  } else {
-    const m = parseMeasurement(first.term, defaultUnit)
-    if (m === null) return null
-    acc = m
-    i = 1
+  // A measurement operand: the start of every product.
+  const measurement = (): number | null => {
+    const t = tokens[i]
+    if (!t || !('term' in t)) return null
+    i++
+    return parseMeasurement(t.term, defaultUnit)
   }
 
-  for (; i < tokens.length; i += 2) {
-    const opToken = tokens[i]
-    const termToken = tokens[i + 1]
-    if (!opToken || !('op' in opToken) || !termToken || !('term' in termToken)) return null
-
-    const op = opToken.op
-    if (op === '+' || op === '-') {
-      const m = parseMeasurement(termToken.term, defaultUnit)
-      if (m === null) return null
-      acc = op === '+' ? acc + m : acc - m
-    } else {
+  // `start` scaled by any run of `* n` / `/ n` that follows it.
+  const product = (start: number | null): number | null => {
+    let acc = start
+    while (acc !== null && i < tokens.length) {
+      const opToken = tokens[i]
+      if (!('op' in opToken) || (opToken.op !== '*' && opToken.op !== '/')) break
+      const termToken = tokens[i + 1]
+      if (!termToken || !('term' in termToken)) return null
       const n = parseNumeric(termToken.term) // `*` / `/` take a plain scalar
-      if (n === null || (op === '/' && n === 0)) return null
-      acc = op === '*' ? acc * n : acc / n
+      if (n === null || (opToken.op === '/' && n === 0)) return null
+      acc = opToken.op === '*' ? acc * n : acc / n
+      i += 2
     }
+    return acc
   }
 
-  return acc
+  let total = product('op' in tokens[0] ? currentMm : measurement())
+  while (total !== null && i < tokens.length) {
+    const opToken = tokens[i++]
+    if (!('op' in opToken)) return null
+    const next = product(measurement())
+    if (next === null) return null
+    total = opToken.op === '+' ? total + next : total - next
+  }
+  return total
 }
 
 function parseNumeric(part: string): number | null {
@@ -243,11 +250,14 @@ function parseNumeric(part: string): number | null {
 /** Format a millimetre value for display in the given unit. Inches render as
  *  shop-friendly fractions to the nearest 1/64" (fine enough that a value on any
  *  supported precision grid — 1/4 … 1/64 — shows as its exact reduced fraction);
- *  metric renders as decimals. */
+ *  metric renders as decimals to a tenth of a millimetre, trailing zeros
+ *  trimmed. Sizes on the 1 mm grid still read as whole numbers; finer values
+ *  that are meant to be fine (a 2.6 mm kerf) show as typed instead of rounding
+ *  to a number that isn't stored. */
 export function formatMeasurement(mm: number, unit: Unit): string {
   const value = fromMm(mm, unit)
   if (unit === 'inch') return formatInches(value)
-  const decimals = unit === 'mm' ? 0 : 1
+  const decimals = unit === 'mm' ? 1 : 2
   return trimZeros(value.toFixed(decimals))
 }
 
