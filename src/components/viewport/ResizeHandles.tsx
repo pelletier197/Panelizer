@@ -4,7 +4,7 @@ import { useThree, type ThreeEvent } from '@react-three/fiber'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, axisField, panelBoxSize, toMetres } from '../../lib/geometry'
 import { roundToUnitGrid } from '../../lib/units'
-import { resizeAlongAxis } from '../../lib/resize'
+import { resizeGroup, resizeRestore } from '../../lib/resize'
 import { SNAP_THRESHOLD_MM, snapHintFromTarget, snapResizeFace, type SnapHitTarget } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
 import { palette } from './palette'
@@ -33,6 +33,11 @@ function faceCenterMm(panel: Panel, axis: Axis3, faceSign: FaceSign): [number, n
  *  into itself as the face (and thus the handle) moves during the drag. */
 interface DragStart {
   panel: Panel
+  /** Every selected panel this face can resize (the handle's own panel
+   *  included), frozen at pointer-down. A single selection is a group of one. */
+  group: Panel[]
+  /** Unselected panels the moving face can snap onto, frozen at pointer-down. */
+  others: Panel[]
   /** A fixed point on the drag-axis line, frozen at pointer-down. Frozen (not
    *  recomputed from the live panel) so the resize can't feed back on itself
    *  as the face moves during the drag. */
@@ -43,23 +48,24 @@ interface DragStart {
 /**
  * One grab handle floating off a resizable face. Drag it along the face
  * normal to resize that dimension with the opposite face held fixed
- * (Alt = symmetric, both faces move and the centre stays put).
+ * (Alt = symmetric, both faces move and the centre stays put). With several
+ * panels selected the same face displacement applies to each of them along the
+ * same world axis and side — each holding its own opposite face — and panels
+ * whose thickness runs along that axis are left alone.
  *
  * OrbitControls listens on the canvas element directly, so `stopPropagation`
  * can't keep it from also handling the drag — instead we disable it while the
  * pointer is over a handle and restore it when the pointer leaves.
  */
 function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; faceSign: FaceSign }) {
-  const updatePanel = useDesignStore((s) => s.updatePanel)
-  const resizePanelLive = useDesignStore((s) => s.resizePanelLive)
+  const patchPanelsLive = useDesignStore((s) => s.patchPanelsLive)
+  const commitPanelPatches = useDesignStore((s) => s.commitPanelPatches)
   const restorePanels = useDesignStore((s) => s.restorePanels)
   const setOrbit = useDesignStore((s) => s.setOrbitEnabled)
   const clearGesture = useDesignStore((s) => s.clearGesture)
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
   const unit = useDesignStore((s) => s.unit)
   const precision = useDesignStore((s) => s.precision)
-  const panels = useDesignStore((s) => s.panels)
-  const others = panels.filter((p) => p.id !== panel.id)
   const invalidate = useThree((s) => s.invalidate)
 
   const drag = useRef<DragStart | null>(null)
@@ -103,7 +109,7 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
   const faceSnap = (ray: ThreeEvent<PointerEvent>['ray']) => {
     if (!drag.current) return { delta: 0, snap: null }
     const raw = (axisParam(ray, drag.current.p0) - drag.current.param0) / MM_TO_M
-    return snapResizeFace(drag.current.panel, axis, faceSign, raw, others, SNAP_THRESHOLD_MM)
+    return snapResizeFace(drag.current.panel, axis, faceSign, raw, drag.current.others, SNAP_THRESHOLD_MM)
   }
 
   // Show (or clear) the snap guide, drawn on the contact rectangle (the overlap
@@ -114,45 +120,33 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
 
   const label = axisField(panel.normal, axis) === 'length' ? 'Length' : 'Width'
 
-  // Resize from a frozen start panel by the given axis displacement (mm).
-  const applyFrom = (startPanel: Panel, deltaMm: number, symmetric: boolean, commit: boolean) => {
-    const result = resizeAlongAxis(startPanel, axis, faceSign, deltaMm, symmetric)
-    if (!result) return
+  // Resize the frozen start group by the given axis displacement (mm). On
+  // commit each size lands on the unit grid so the part reads (and stores) as
+  // an exact fraction — what you see is what's cut.
+  const applyFrom = (startGroup: Panel[], deltaMm: number, symmetric: boolean, commit: boolean) => {
     if (!commit) {
-      resizePanelLive(panel.id, { [result.field]: result.value, position: result.position })
+      patchPanelsLive(resizeGroup(startGroup, axis, faceSign, deltaMm, symmetric))
       return
     }
-    // On commit, snap the final SIZE onto the unit grid so the part reads (and
-    // stores) as an exact fraction — what you see is what's cut. Recompute the
-    // centre from the held (opposite) face so snapping the size never drifts the
-    // fixed edge; a symmetric resize keeps the centre and just changes size.
-    const size = roundToUnitGrid(result.value, unit, precision)
-    let position = [...startPanel.position] as [number, number, number]
-    if (!symmetric) {
-      const fixedFace = startPanel.position[axis] - faceSign * (panelBoxSize(startPanel)[axis] / 2)
-      position[axis] = fixedFace + faceSign * (size / 2)
-    }
-    updatePanel(panel.id, { [result.field]: size, position })
+    const round = (mm: number) => roundToUnitGrid(mm, unit, precision)
+    commitPanelPatches(resizeGroup(startGroup, axis, faceSign, deltaMm, symmetric, round))
   }
 
   // What the corner readout does for this resize: apply/commit/cancel all work
-  // from the frozen start panel captured at pointer-down.
-  const resizeGesture = (startPanel: Panel, symmetric: boolean): GestureSpec => ({
+  // from the frozen start group captured at pointer-down.
+  const resizeGesture = (startGroup: Panel[], symmetric: boolean): GestureSpec => ({
     kind: 'resize',
     label,
     apply: (mm) => {
       lastDelta.current = mm
-      applyFrom(startPanel, mm, symmetric, false)
+      applyFrom(startGroup, mm, symmetric, false)
     },
     commit: () => {
-      applyFrom(startPanel, lastDelta.current, symmetric, true)
+      applyFrom(startGroup, lastDelta.current, symmetric, true)
       clearGesture()
     },
     cancel: () => {
-      const original = resizeAlongAxis(startPanel, axis, faceSign, 0, symmetric)
-      if (original) {
-        restorePanels([{ id: panel.id, patch: { [original.field]: original.value, position: original.position } }])
-      }
+      restorePanels(resizeRestore(startGroup))
       clearGesture()
     },
   })
@@ -163,7 +157,17 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
     setOrbit(false)
     gesture.begin()
     const p0 = new Vector3(...toMetres(faceCenter))
-    drag.current = { panel, p0, param0: axisParam(e.ray, p0) }
+    const { panels, selectedIds } = useDesignStore.getState()
+    const chosen = new Set(selectedIds)
+    drag.current = {
+      panel,
+      // Selected panels whose thickness runs along this axis can't follow.
+      group: panels.filter((p) => chosen.has(p.id) && axisField(p.normal, axis) !== 'thickness'),
+      // A group member is moving too, so it's no anchor to snap onto.
+      others: panels.filter((p) => !chosen.has(p.id)),
+      p0,
+      param0: axisParam(e.ray, p0),
+    }
   }
 
   const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -182,11 +186,10 @@ function FaceHandle({ panel, axis, faceSign }: { panel: Panel; axis: Axis3; face
       deltaMm = (snappedSize - startSize) / factor
     }
     lastDelta.current = deltaMm
-    applyFrom(drag.current.panel, deltaMm, e.nativeEvent.altKey, false)
-
-    const startPanel = drag.current.panel
+    const startGroup = drag.current.group
     const symmetric = e.nativeEvent.altKey
-    gesture.track(deltaMm, () => resizeGesture(startPanel, symmetric))
+    applyFrom(startGroup, deltaMm, symmetric, false)
+    gesture.track(deltaMm, () => resizeGesture(startGroup, symmetric))
 
     showSnap(fs.snap)
     invalidate()

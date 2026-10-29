@@ -40,6 +40,7 @@ export function GrainEditor({
 }) {
   const panels = useDesignStore((s) => s.panels)
   const updatePanel = useDesignStore((s) => s.updatePanel)
+  const updatePanels = useDesignStore((s) => s.updatePanels)
   const byId = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels])
   const fmt = (mm: number) => formatMeasurement(mm, unit)
 
@@ -69,7 +70,7 @@ export function GrainEditor({
   }
 
   const setGrain = (ids: string[], grain: Grain) =>
-    ids.forEach((id) => updatePanel(id, { grain }))
+    updatePanels(ids, { grain })
 
   const cycleGroupGrain = (ids: string[]) => {
     const shared = sharedGrain(ids)
@@ -79,7 +80,7 @@ export function GrainEditor({
   }
 
   const setIncluded = (ids: string[], included: boolean) =>
-    ids.forEach((id) => updatePanel(id, { excludeFromCutlist: !included }))
+    updatePanels(ids, { excludeFromCutlist: !included })
 
   return (
     <Section title="Grain">

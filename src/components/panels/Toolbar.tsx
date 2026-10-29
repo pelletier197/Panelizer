@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type { Panel } from '../../types/panel'
-import { useDesignStore, type Tool } from '../../store/designStore'
+import { currentDesign, useDesignStore, type Tool } from '../../store/designStore'
+import { TOOL_SHORTCUTS, useCheatSheet } from '../../hooks/useShortcuts'
 import { downloadDesign, parse } from '../../lib/persistence'
 import { designToLink } from '../../lib/share'
 import { defaultThinThickness } from '../../lib/panel'
@@ -40,12 +41,10 @@ const TOOL_SECTIONS: { label: string; tools: { tool: Tool; label: string }[] }[]
 const DIVIDER = <div className="my-1 border-t border-edge" />
 
 export function Toolbar() {
-  const panels = useDesignStore((s) => s.panels)
-  const materials = useDesignStore((s) => s.materials)
-  const stocks = useDesignStore((s) => s.stocks)
+  // Only emptiness is needed to render; export and share read the whole design
+  // at click time, so a drag doesn't re-render the toolbar every frame.
+  const empty = useDesignStore((s) => s.panels.length === 0)
   const unit = useDesignStore((s) => s.unit)
-  const kerf = useDesignStore((s) => s.kerf)
-  const margin = useDesignStore((s) => s.margin)
   const setUnit = useDesignStore((s) => s.setUnit)
   const convertUnit = useDesignStore((s) => s.convertUnit)
   const precision = useDesignStore((s) => s.precision)
@@ -58,8 +57,8 @@ export function Toolbar() {
   const fixPrecision = useDesignStore((s) => s.fixPrecision)
   const clear = useDesignStore((s) => s.clear)
   const fileInput = useRef<HTMLInputElement>(null)
+  const showCheatSheet = useCheatSheet()
   const confirm = useConfirm()
-  const empty = panels.length === 0
 
   // Changing the document unit converts the geometry onto the new unit's grid.
   // Crossing measuring systems (mm↔inch) is lossy — every size snaps to the
@@ -86,7 +85,7 @@ export function Toolbar() {
   // one predictable path, and the link is always there to select by hand.
   const share = async (close: () => void) => {
     close()
-    const link = await designToLink({ panels, materials, stocks, unit, precision, kerf, margin })
+    const link = await designToLink(currentDesign())
 
     await confirm({
       title: 'Share this design',
@@ -158,6 +157,7 @@ export function Toolbar() {
                 <Button
                   key={section.label}
                   variant={tool === t ? 'primary' : 'ghost'}
+                  title={`${label} (${TOOL_SHORTCUTS[t]})`}
                   onClick={() => setTool(t)}
                 >
                   {label}
@@ -194,7 +194,10 @@ export function Toolbar() {
                           close()
                         }}
                       >
-                        <span className={cx(tool === t && 'text-accent')}>{label}</span>
+                        <span className="flex items-center gap-4">
+                          <span className={cx('flex-1', tool === t && 'text-accent')}>{label}</span>
+                          <kbd className="text-micro text-ink-faint">{TOOL_SHORTCUTS[t]}</kbd>
+                        </span>
                       </MenuItem>
                     ))}
                   </MenuList>
@@ -243,7 +246,7 @@ export function Toolbar() {
               <MenuItem
                 disabled={empty}
                 onClick={() => {
-                  downloadDesign({ panels, materials, stocks, unit, precision, kerf, margin })
+                  downloadDesign(currentDesign())
                   close()
                 }}
               >
@@ -268,6 +271,14 @@ export function Toolbar() {
                 }}
               >
                 Fix precision
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  void showCheatSheet()
+                }}
+              >
+                Keyboard shortcuts (?)
               </MenuItem>
 
               {DIVIDER}

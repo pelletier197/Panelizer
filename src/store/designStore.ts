@@ -7,6 +7,7 @@ import type { Stock } from '../lib/stock'
 import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
+import type { PanelPatch } from '../lib/resize'
 import { createMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
 import { loadFromStorage, saveToStorage } from '../lib/persistence'
@@ -35,17 +36,22 @@ export interface Gesture {
   cancel: () => void
 }
 
-/** An undoable design snapshot. Selection and tool are transient and left out. */
-interface Snapshot {
-  panels: Panel[]
-  materials: Material[]
-  stocks: Stock[]
-  unit: Unit
-  /** Imperial working precision (fraction denominator, e.g. 16 = 1/16"). */
-  precision: number
-  kerf: number
-  margin: number
-}
+/** An undoable design snapshot: exactly the saved document. Selection and tool
+ *  are transient and left out. */
+type Snapshot = Design
+
+/** The design part of the state, picked out field by field. This is the one
+ *  place the store lists the document's fields: undo, redo and autosave all go
+ *  through it, so a field added to `Design` only needs adding here. */
+const pickDesign = (s: Design): Design => ({
+  panels: s.panels,
+  materials: s.materials,
+  stocks: s.stocks,
+  unit: s.unit,
+  precision: s.precision,
+  kerf: s.kerf,
+  margin: s.margin,
+})
 
 /** How many undo steps to keep. */
 const HISTORY_LIMIT = 100
@@ -58,16 +64,9 @@ export interface ToolPick {
   point: Point
 }
 
-interface DesignState {
-  panels: Panel[]
-  materials: Material[]
-  stocks: Stock[]
-  unit: Unit
-  /** Imperial working precision (fraction denominator, e.g. 16 = 1/16"); the
-   *  grid that sizes/positions snap to. Ignored in metric (always 1 mm). */
-  precision: number
-  kerf: number
-  margin: number
+/** The design document (see `Design` for its fields) plus transient UI state
+ *  and the actions that change either. */
+interface DesignState extends Design {
   /** Selected panels. Empty = nothing selected; one id = the classic single
    *  selection; several = a multi-selection (Shift+click) that moves together.
    *  The last id is the "primary" — it carries the move gizmo. */
@@ -91,6 +90,10 @@ interface DesignState {
   /** Replace (or, when additive, extend) the selection with a set of ids —
    *  used by the marquee box-select. */
   selectInBox: (ids: string[], additive: boolean) => void
+  /** Select every visible panel. */
+  selectAll: () => void
+  /** Swap the selection for every visible panel that isn't in it. */
+  invertSelection: () => void
   /** Active snap markers for the current drag, shown in the viewport as plane
    *  guides with a label (edge / butt / middle). Empty when not snapping.
    *  Transient UI state — never persisted or undone. */
@@ -124,25 +127,32 @@ interface DesignState {
 
   addPanel: (preset?: Partial<Panel>) => void
   updatePanel: (id: string, patch: Partial<Panel>) => void
+  /** Apply the same patch to several panels in one undo step. */
+  updatePanels: (ids: string[], patch: Partial<Panel>) => void
+  /** Move every selected panel by `mm` along one axis, as one undo step. */
+  nudgeSelection: (axis: 0 | 1 | 2, mm: number) => void
   movePanelLive: (id: string, position: [number, number, number]) => void
   /** Live (non-persisted) move of several panels at once — the group drag. */
   movePanelsLive: (moves: { id: string; position: [number, number, number] }[]) => void
   /** Commit a group move as a single undo step. */
   commitPanelsMove: (moves: { id: string; position: [number, number, number] }[]) => void
-  resizePanelLive: (id: string, patch: Partial<Panel>) => void
+  /** Live (non-persisted) per-panel patches — one frame of a (group) resize. */
+  patchPanelsLive: (patches: PanelPatch[]) => void
+  /** Commit per-panel patches as a single undo step. */
+  commitPanelPatches: (patches: PanelPatch[]) => void
   /** Revert a deferred gesture: apply the given patches (the panels' pre-gesture
    *  fields) and drop the pending drag snapshot, WITHOUT touching undo history —
    *  nothing was committed, so this leaves the saved state untouched. Used when
    *  a move/resize typed-entry box is cancelled with Escape. */
   restorePanels: (restore: { id: string; patch: Partial<Panel> }[]) => void
-  removePanel: (id: string) => void
-  /** Remove several panels in one undo step (multi-selection delete). */
+  /** Remove panels in one undo step (single or multi-selection delete). */
   removePanels: (ids: string[]) => void
   /** Show/hide several panels in one undo step. Hidden panels render as ghosts
    *  and can't be clicked, but still count for snapping/overlaps/cutlist. */
   setHidden: (ids: string[], hidden: boolean) => void
-  duplicatePanel: (id: string) => void
-  setPanelMaterial: (panelId: string, materialId: string) => void
+  /** Copy panels (offset so they don't hide the originals) and select the
+   *  copies, in one undo step. */
+  duplicatePanels: (ids: string[]) => void
   select: (id: string | null) => void
   /** Select from a click in the 3D scene — no-ops once if a resize drag just
    *  armed suppression, so releasing a handle doesn't select the panel under it.
@@ -184,24 +194,15 @@ const spawnOffset = (index: number): [number, number, number] => [index * 30, in
 export const useDesignStore = create<DesignState>((set, get) => {
   const initial = loadFromStorage()
 
-  const snapshot = (s: DesignState): Snapshot => ({
-    panels: s.panels,
-    materials: s.materials,
-    stocks: s.stocks,
-    unit: s.unit,
-    precision: s.precision,
-    kerf: s.kerf,
-    margin: s.margin,
-  })
+  const snapshot = pickDesign
 
-  // Every persisted change funnels through here so state, autosave, and the
-  // undo history stay in sync. The pre-change snapshot is pushed onto `past`
-  // and the redo stack is cleared (a fresh edit forks history). Selection is
-  // transient and intentionally left out of both autosave and history.
+  // Every persisted change funnels through here so state and the undo history
+  // stay in sync (autosave follows from the subscription below the store). The
+  // pre-change snapshot is pushed onto `past` and the redo stack is cleared (a
+  // fresh edit forks history). Selection is transient and intentionally left
+  // out of both autosave and history.
   const commit = (next: Partial<DesignState>) => {
     const current = get()
-    const merged = { ...current, ...next }
-    saveToStorage(snapshot(merged))
     // A drag's "before" is the state at its first live frame (`dragOrigin`), so
     // the whole drag is one undo step; a plain edit has no dragOrigin.
     const before = current.dragOrigin ?? snapshot(current)
@@ -224,16 +225,9 @@ export const useDesignStore = create<DesignState>((set, get) => {
   // state is pushed onto the opposite stack so the move is itself reversible.
   const applyHistory = (snap: Snapshot, from: 'past' | 'future') => {
     const current = get()
-    saveToStorage(snap)
     const ids = new Set(snap.panels.map((p) => p.id))
     set({
-      panels: snap.panels,
-      materials: snap.materials,
-      stocks: snap.stocks,
-      unit: snap.unit,
-      precision: snap.precision,
-      kerf: snap.kerf,
-      margin: snap.margin,
+      ...snap,
       selectedIds: current.selectedIds.filter((id) => ids.has(id)),
       toolPick: null,
       dragOrigin: null,
@@ -242,14 +236,22 @@ export const useDesignStore = create<DesignState>((set, get) => {
     })
   }
 
+  // Apply `fn` to the panels whose id is in `ids`, leaving the rest as-is.
+  const mapPanels = (ids: Iterable<string>, fn: (p: Panel) => Panel): Panel[] => {
+    const targets = new Set(ids)
+    return get().panels.map((p) => (targets.has(p.id) ? fn(p) : p))
+  }
+
+  // Merge each patch into its panel, leaving unpatched panels as-is.
+  const applyPatches = (patches: PanelPatch[]): Panel[] => {
+    const byId = new Map(patches.map((x) => [x.id, x.patch]))
+    return mapPanels(byId.keys(), (p) => ({ ...p, ...byId.get(p.id)! }))
+  }
+
+  const visibleIds = () => get().panels.filter((p) => !p.hidden).map((p) => p.id)
+
   return {
-    panels: initial.panels,
-    materials: initial.materials,
-    stocks: initial.stocks,
-    unit: initial.unit,
-    precision: initial.precision,
-    kerf: initial.kerf,
-    margin: initial.margin,
+    ...initial,
     selectedIds: [],
     dragMode: 'orbit',
     marqueeBox: null,
@@ -293,8 +295,22 @@ export const useDesignStore = create<DesignState>((set, get) => {
       commit({ panels: [...get().panels, panel], selectedIds: [panel.id] })
     },
 
-    updatePanel: (id, patch) => {
-      commit({ panels: get().panels.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
+    updatePanel: (id, patch) => get().updatePanels([id], patch),
+
+    updatePanels: (ids, patch) => {
+      if (ids.length > 0) commit({ panels: mapPanels(ids, (p) => ({ ...p, ...patch })) })
+    },
+
+    nudgeSelection: (axis, mm) => {
+      const { selectedIds } = get()
+      if (selectedIds.length === 0) return
+      commit({
+        panels: mapPanels(selectedIds, (p) => {
+          const position: Point = [...p.position]
+          position[axis] += mm
+          return { ...p, position }
+        }),
+      })
     },
 
     // Live position update during a drag: no autosave (the drop commits it),
@@ -315,8 +331,10 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     // Live length/width/position update while dragging a resize face handle;
     // same non-autosaved pattern as movePanelLive.
-    resizePanelLive: (id, patch) => {
-      live(get().panels.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    patchPanelsLive: (patches) => live(applyPatches(patches)),
+
+    commitPanelPatches: (patches) => {
+      if (patches.length > 0) commit({ panels: applyPatches(patches) })
     },
 
     restorePanels: (restore) => {
@@ -327,14 +345,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
       })
     },
 
-    removePanel: (id) => {
-      commit({
-        panels: get().panels.filter((p) => p.id !== id),
-        selectedIds: get().selectedIds.filter((x) => x !== id),
-      })
-    },
-
     removePanels: (ids) => {
+      if (ids.length === 0) return
       const drop = new Set(ids)
       commit({
         panels: get().panels.filter((p) => !drop.has(p.id)),
@@ -345,28 +357,26 @@ export const useDesignStore = create<DesignState>((set, get) => {
     setHidden: (ids, hidden) => {
       const targets = new Set(ids)
       commit({
-        panels: get().panels.map((p) => (targets.has(p.id) ? { ...p, hidden } : p)),
+        panels: mapPanels(targets, (p) => ({ ...p, hidden })),
         // A hidden panel can't be interacted with, so drop it from any active
         // selection (keeps a stale gizmo off a ghosted mesh).
         selectedIds: hidden ? get().selectedIds.filter((x) => !targets.has(x)) : get().selectedIds,
       })
     },
 
-    duplicatePanel: (id) => {
-      const source = get().panels.find((p) => p.id === id)
-      if (!source) return
-      const copy = createPanel({
-        ...source,
-        name: `${source.name} copy`,
-        position: [source.position[0] + 30, source.position[1], source.position[2]],
-      })
-      commit({ panels: [...get().panels, copy], selectedIds: [copy.id] })
-    },
-
-    setPanelMaterial: (panelId, materialId) => {
-      commit({
-        panels: get().panels.map((p) => (p.id === panelId ? { ...p, materialId } : p)),
-      })
+    duplicatePanels: (ids) => {
+      const wanted = new Set(ids)
+      const copies = get()
+        .panels.filter((p) => wanted.has(p.id))
+        .map((source) =>
+          createPanel({
+            ...source,
+            name: `${source.name} copy`,
+            position: [source.position[0] + 30, source.position[1], source.position[2]],
+          }),
+        )
+      if (copies.length === 0) return
+      commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
     },
 
     // Leaving select mode drops any half-drawn marquee.
@@ -386,11 +396,20 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
     clearGesture: () => set({ gesture: null }),
 
-    selectInBox: (ids, additive) =>
-      set((state) => ({
-        selectedIds: additive ? Array.from(new Set([...state.selectedIds, ...ids])) : ids,
-        dragOrigin: null,
-      })),
+    selectInBox: (ids, additive) => {
+      // Same rule as a click: a ghosted panel can't be picked.
+      const visible = new Set(visibleIds())
+      const picked = ids.filter((id) => visible.has(id))
+      const selectedIds = additive ? Array.from(new Set([...get().selectedIds, ...picked])) : picked
+      set({ selectedIds, dragOrigin: null })
+    },
+
+    selectAll: () => set({ selectedIds: visibleIds(), dragOrigin: null }),
+
+    invertSelection: () => {
+      const current = new Set(get().selectedIds)
+      set({ selectedIds: visibleIds().filter((id) => !current.has(id)), dragOrigin: null })
+    },
 
     select: (id) => set({ selectedIds: id ? [id] : [], dragOrigin: null }),
 
@@ -470,9 +489,23 @@ export const useDesignStore = create<DesignState>((set, get) => {
     setKerf: (kerf) => commit({ kerf: Math.max(0, kerf) }),
     setMargin: (margin) => commit({ margin: Math.max(0, margin) }),
 
-    loadDesign: ({ panels, materials, stocks, unit, precision, kerf, margin }) =>
-      commit({ panels, materials, stocks, unit, precision, kerf, margin, selectedIds: [] }),
+    loadDesign: (design) => commit({ ...pickDesign(design), selectedIds: [] }),
 
     clear: () => commit({ panels: [], stocks: [], selectedIds: [] }),
   }
+})
+
+/** The design as it stands right now — for one-off reads at event time (export,
+ *  share) that shouldn't subscribe a component to every edit. */
+export const currentDesign = (): Design => pickDesign(useDesignStore.getState())
+
+// Autosave: mirror every committed design change to storage. Live drag frames
+// (`dragOrigin` set) are skipped — the drop commits, and that commit saves.
+// Kept out of the actions so they stay plain state transitions.
+useDesignStore.subscribe((state, prev) => {
+  if (state.dragOrigin !== null) return
+  const next = pickDesign(state)
+  const before = pickDesign(prev)
+  const changed = (Object.keys(next) as (keyof Design)[]).some((k) => next[k] !== before[k])
+  if (changed) saveToStorage(next)
 })

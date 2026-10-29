@@ -46,3 +46,48 @@ export function resizeAlongAxis(
 
   return { field, value, position }
 }
+
+/** A per-panel change, as the store applies it. */
+export interface PanelPatch {
+  id: string
+  patch: Partial<Panel>
+}
+
+/**
+ * Resize a group of panels by the same face displacement — a multi-selection
+ * dragged by one face handle. Each panel moves its own face on the `faceSign`
+ * side by `delta` and holds its own opposite face, exactly as a single resize
+ * would. Panels whose thickness runs along `axis` can't resize that way and are
+ * left out of the result.
+ *
+ * Pass `round` on commit to land each panel's size on the working grid; the
+ * centre is then recomputed from the held face, so rounding the size never
+ * drifts the fixed edge (a symmetric resize keeps its centre either way).
+ */
+export function resizeGroup(
+  panels: Panel[],
+  axis: 0 | 1 | 2,
+  faceSign: 1 | -1,
+  delta: number,
+  symmetric = false,
+  round?: (mm: number) => number,
+): PanelPatch[] {
+  return panels.flatMap((panel) => {
+    const result = resizeAlongAxis(panel, axis, faceSign, delta, symmetric)
+    if (!result) return []
+    if (!round) return [{ id: panel.id, patch: { [result.field]: result.value, position: result.position } }]
+
+    const size = round(result.value)
+    const position: Vec3 = [...panel.position]
+    if (!symmetric) {
+      const fixedFace = panel.position[axis] - faceSign * (panelBoxSize(panel)[axis] / 2)
+      position[axis] = fixedFace + faceSign * (size / 2)
+    }
+    return [{ id: panel.id, patch: { [result.field]: size, position } }]
+  })
+}
+
+/** The fields a resize touches, as they were — what a cancelled resize puts back. */
+export function resizeRestore(panels: Panel[]): PanelPatch[] {
+  return panels.map((p) => ({ id: p.id, patch: { length: p.length, width: p.width, position: p.position } }))
+}

@@ -13,39 +13,24 @@ break it are in [Not doing](#not-doing) with the reason.
 
 ## 1. Selection and batch editing
 
-The current multi-selection can move panels together and not much else, and the
-reason is structural rather than cosmetic: **the store has no batch mutator.**
-`updatePanel(id, patch)` calls `commit` per invocation, so any multi-panel edit
-would be N commits and N undo steps. Only `removePanels`, `setHidden` and
-`commitPanelsMove` are batch-aware. So the primitive comes first and everything
-else follows from it.
+Done: the batch primitive (`updatePanels`, one undo step), a multi-select
+inspector (material, orientation, face size and thickness, with differing values
+shown as `Mixed`), duplicating a whole selection, and `Ctrl+A` / `Ctrl+I` / `Esc`.
+Still open:
 
-- **`updatePanels(ids, patch)`** — one `commit`, one undo step. Roughly six
-  lines, and it unblocks the rest of this section.
-- **Multi-select inspector.** `PropertiesPanel` currently renders a hint sentence
-  and a Delete button for a multi-selection. It should show the same fields as a
-  single selection: a value shared by every panel displays normally, a differing
-  value displays as `Mixed`, and typing applies to all. Batch **material** and
-  batch **thickness** are the two edits people actually reach for — swapping a
-  whole carcass from 18 mm to 3/4" is currently a per-panel chore.
-- **Batch actions.** Duplicate a selection (offset copies); delete and hide
-  already work. Rotate and mirror come from §2 and are group-aware for free if
-  they pivot on the selection bounding box.
+- **Batch rotate / mirror.** Come from §2 and are group-aware for free if they
+  pivot on the selection bounding box.
 - **Align and distribute.** Align faces on an axis, space evenly. Shares its math
   with the array tool (§6).
-- **Marquee fixes.** Three separate problems in the box-select:
+- **Marquee fixes.** Two remaining problems in the box-select (it no longer
+  picks hidden panels):
   - It hides behind a mode toggle — `dragMode` has to be flipped orbit→select and
     back (`ViewportControls`). A drag on empty space should just box.
   - It is a *touch* test, not an *enclose* test (`MarqueePicker`): any panel whose
     screen-space bounding box merely intersects the marquee is selected, and that
     box is large for a panel seen at an angle. Enclose by default, touch on a
     modifier.
-  - It ignores `hidden`. `sceneSelect` cannot touch a ghost panel but
-    `selectInBox` selects it happily, leaving a gizmo on an invisible mesh —
-    inconsistent with `setHidden`, which deliberately drops hidden panels from the
-    selection.
-- **Selection keys.** `Ctrl+A`, `Esc` to deselect, `Ctrl+I` to invert, and a
-  select-similar (same material / same size / same part group).
+- **Select similar** (same material / same size / same part group).
 - **Parts list wiring.** A group row click calls `select(id)` and *cycles one
   panel at a time*, so clicking a quantity-4 row selects one panel. Row click
   should select the whole group, `Shift+click` should add, and cycling can move to
@@ -99,10 +84,9 @@ the left side of a cabinet, mirror it to the right.
 
 ## 3. Keyboard shortcuts
 
-Only `Ctrl+Z` / `Ctrl+Y` exist today. `Del`, `Ctrl+D` to duplicate, arrow keys to
-nudge by one precision step, `1`–`4` for tools, `Esc` to deselect, `F` to frame
-the selection. Cheapest perceived-quality gain in the whole app, and it subsumes
-the selection keys from §1.
+Mostly done: the keymap lives in `hooks/useShortcuts.tsx` (`?` lists it). Still
+missing: `F` to frame the selection (needs camera access from §4), and `R` /
+`Shift+R` once rotation (§2) exists.
 
 ## 4. Camera views and orthographic mode
 
@@ -160,16 +144,12 @@ the meshes makes the saw diagram map back onto the model.
 
 ## Carried over from the refactor
 
-Both were flagged as behaviour-changing during the `lib/`-and-viewport refactor
-and so were deliberately left out of it. Still open:
+CSV escaping is fixed, and `parse` now drops panels with unusable geometry and
+falls back on bad settings. Still open:
 
-- **CSV escaping.** `partsToCsv` (`lib/parts.ts`) wraps part names in quotes but
-  never escapes an embedded `"`, and the material field is not quoted at all — a
-  material named `Ply, 3/4"` breaks the row. Needs a test of its own, since fixing
-  it changes output.
-- **`persistence.ts` validation.** Schema parsing and migration are hand-rolled
-  and `version` / `VERSION` are unused. Not a problem today; if versioned
-  migrations grow, `zod` would give real validation.
+- **Versioned migrations.** `version` / `VERSION` are written but never read.
+  Shared links make old files a public API, so the next schema change should add
+  a `migrations[v]` chain rather than more ad-hoc back-filling.
 
 ## Not doing
 

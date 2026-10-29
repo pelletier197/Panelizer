@@ -45,8 +45,12 @@ export function serialize({ panels, materials, stocks, unit, precision, kerf, ma
  *  fine). Missing materials fall back to the default; a panel pointing at a
  *  missing material is remapped to a valid one; later-added fields (grain,
  *  stocks, precision, kerf, margin) are back-filled. Panel thickness is
- *  preserved as-is (it's a panel property, not the material's). Throws only when
- *  the JSON is unreadable or has no panels array. */
+ *  preserved as-is (it's a panel property, not the material's).
+ *
+ *  A file is untrusted input (a shared link especially), so fields that would
+ *  break the geometry are checked: a panel whose size, position or axis isn't
+ *  usable is dropped, and an unreadable setting falls back to its default.
+ *  Throws only when the JSON is unreadable or has no panels array. */
 export function parse(json: string): Design {
   const data = JSON.parse(json) as Partial<DesignFile>
   if (!Array.isArray(data.panels)) {
@@ -58,21 +62,44 @@ export function parse(json: string): Design {
       ? data.materials
       : defaultMaterials()
 
-  const panels = data.panels.map((p) => ({
+  const panels = data.panels.filter(isUsablePanel).map((p) => ({
     ...p,
+    id: typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID(),
+    name: typeof p.name === 'string' ? p.name : 'Panel',
     materialId: findMaterial(materials, p.materialId).id,
-    grain: p.grain ?? defaultGrain(p.length, p.width),
+    grain: GRAINS.includes(p.grain) ? p.grain : defaultGrain(p.length, p.width),
   }))
 
   return {
     panels,
     materials,
     stocks: Array.isArray(data.stocks) ? data.stocks : [],
-    unit: data.unit ?? 'mm',
-    precision: data.precision ?? DEFAULT_PRECISION,
-    kerf: data.kerf ?? DEFAULT_KERF,
-    margin: data.margin ?? DEFAULT_MARGIN,
+    unit: UNITS.includes(data.unit as Unit) ? (data.unit as Unit) : 'mm',
+    precision: positiveOr(data.precision, DEFAULT_PRECISION),
+    kerf: nonNegativeOr(data.kerf, DEFAULT_KERF),
+    margin: nonNegativeOr(data.margin, DEFAULT_MARGIN),
   }
+}
+
+const AXES: readonly unknown[] = ['x', 'y', 'z']
+const GRAINS: readonly unknown[] = ['length', 'width', 'none']
+const UNITS: readonly unknown[] = ['mm', 'cm', 'inch']
+
+const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const positiveOr = (v: unknown, fallback: number) => (isFiniteNumber(v) && v > 0 ? v : fallback)
+const nonNegativeOr = (v: unknown, fallback: number) => (isFiniteNumber(v) && v >= 0 ? v : fallback)
+
+/** Whether a stored panel has the geometry the viewport and nesting rely on. */
+function isUsablePanel(p: Partial<Panel> | null): p is Panel {
+  return (
+    typeof p === 'object' &&
+    p !== null &&
+    AXES.includes(p.normal) &&
+    [p.length, p.width, p.thickness].every((v) => isFiniteNumber(v) && v > 0) &&
+    Array.isArray(p.position) &&
+    p.position.length === 3 &&
+    p.position.every(isFiniteNumber)
+  )
 }
 
 /** Trigger a browser download of the design as a `.panelizer.json` file. */

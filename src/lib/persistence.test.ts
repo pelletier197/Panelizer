@@ -100,6 +100,38 @@ describe('parse — validation', () => {
   it('accepts an empty panels array', () => {
     expect(parse(JSON.stringify({ panels: [] })).panels).toEqual([])
   })
+
+  it('drops panels whose geometry is unusable, keeping the rest', () => {
+    const raw = {
+      panels: [
+        panel({ name: 'ok' }),
+        { ...panel(), length: 'wide' },
+        { ...panel(), width: -5 },
+        { ...panel(), normal: 'w' },
+        { ...panel(), position: [0, 0] },
+        { ...panel(), position: [0, null, 0] },
+        null,
+      ],
+    }
+    const d = parse(JSON.stringify(raw))
+    expect(d.panels.map((p) => p.name)).toEqual(['ok'])
+  })
+
+  it('repairs a missing id and name rather than dropping the panel', () => {
+    const raw = { panels: [{ ...panel(), id: undefined, name: 42 }] }
+    const [p] = parse(JSON.stringify(raw)).panels
+    expect(typeof p.id).toBe('string')
+    expect(p.id).not.toBe('')
+    expect(p.name).toBe('Panel')
+  })
+
+  it('falls back to defaults for unreadable settings', () => {
+    const d = parse(JSON.stringify({ panels: [], unit: 'furlong', precision: 0, kerf: -1, margin: 'x' }))
+    expect(d.unit).toBe('mm')
+    expect(d.precision).toBe(DEFAULT_PRECISION)
+    expect(d.kerf).toBe(DEFAULT_KERF)
+    expect(d.margin).toBe(DEFAULT_MARGIN)
+  })
 })
 
 describe('parse — back-filling older files', () => {
