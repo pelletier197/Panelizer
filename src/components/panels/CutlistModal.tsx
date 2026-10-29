@@ -33,7 +33,7 @@ export function CutlistModal() {
   const precision = useDesignStore((s) => s.precision)
   const margin = useDesignStore((s) => s.margin)
 
-  const model = useCutlistModel()
+  const model = useCutlistModel(open)
   const printing = usePrintMode()
   const tooltip = useCursorTooltip()
 
@@ -110,7 +110,8 @@ export function CutlistModal() {
 
           <CutResult
             result={model.result}
-            parts={model.parts}
+            pending={model.pending}
+            parts={model.cutParts}
             missing={model.missing}
             unit={unit}
             margin={margin}

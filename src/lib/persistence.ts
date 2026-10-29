@@ -5,6 +5,7 @@ import type { Stock } from './stock'
 import type { Unit } from './units'
 import { DEFAULT_PRECISION } from './units'
 import { defaultMaterials, findMaterial } from './materials'
+import { DEFAULT_CUT_STYLE, type CutStyle } from './nesting'
 
 const STORAGE_KEY = 'panelizer.autosave'
 const FORMAT = 'panelizer'
@@ -27,6 +28,8 @@ export interface Design {
   kerf: number
   /** Trim margin (mm) kept clear around the edge of each sheet. */
   margin: number
+  /** How the cutlist lays parts out: saw-friendly straight cuts, or free. */
+  cutStyle: CutStyle
 }
 
 /** On-disk / on-wire shape. Kept flat and versioned so older files can be
@@ -36,15 +39,15 @@ export interface DesignFile extends Design {
   version: number
 }
 
-export function serialize({ panels, materials, stocks, unit, precision, kerf, margin }: Design): DesignFile {
-  return { format: FORMAT, version: VERSION, unit, precision, kerf, margin, materials, stocks, panels }
+export function serialize({ panels, materials, stocks, unit, precision, kerf, margin, cutStyle }: Design): DesignFile {
+  return { format: FORMAT, version: VERSION, unit, precision, kerf, margin, cutStyle, materials, stocks, panels }
 }
 
 /** Parse a design file by its shape, not a format tag: as long as it has a
  *  panels array we try to load it (so files from any past version / name import
  *  fine). Missing materials fall back to the default; a panel pointing at a
  *  missing material is remapped to a valid one; later-added fields (grain,
- *  stocks, precision, kerf, margin) are back-filled. Panel thickness is
+ *  stocks, precision, kerf, margin, cutStyle) are back-filled. Panel thickness is
  *  preserved as-is (it's a panel property, not the material's).
  *
  *  A file is untrusted input (a shared link especially), so fields that would
@@ -78,6 +81,7 @@ export function parse(json: string): Design {
     precision: positiveOr(data.precision, DEFAULT_PRECISION),
     kerf: nonNegativeOr(data.kerf, DEFAULT_KERF),
     margin: nonNegativeOr(data.margin, DEFAULT_MARGIN),
+    cutStyle: data.cutStyle === 'free' ? 'free' : DEFAULT_CUT_STYLE,
   }
 }
 
@@ -130,6 +134,7 @@ export function loadFromStorage(): Design {
     precision: DEFAULT_PRECISION,
     kerf: DEFAULT_KERF,
     margin: DEFAULT_MARGIN,
+    cutStyle: DEFAULT_CUT_STYLE,
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)

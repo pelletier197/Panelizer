@@ -52,13 +52,6 @@ Navigation is free orbit only. Add Front / Side / Top / Iso presets and an
 orthographic toggle — an ortho top view makes alignment obvious without leaning
 on snapping. drei supplies most of the parts.
 
-## 5. Cost estimate
-
-Add a `price` field to `Stock`. The cutlist already computes sheets needed and
-waste, so multiplying through gives a project total and a per-material breakdown.
-One field, one line of output, and it takes Panelizer from hobby modelling to
-something you can quote from.
-
 ## 6. Array and distribute
 
 Select a shelf, then "5 copies, evenly distributed between these two panels" or
@@ -79,7 +72,8 @@ from `panelBounds`. Answers "will it fit the alcove" without measuring anything.
 
 Per panel, flag which of the four face edges get banding; the parts list totals
 linear metres. Small model addition (`edges?: [boolean, boolean, boolean, boolean]`),
-real shop need.
+real shop need. Deferred: marking which edges are banded is per-panel UI work
+that costs more than the total is worth for now.
 
 ## 10. Named project slots
 
@@ -110,6 +104,9 @@ falls back on bad settings. Still open:
   a `migrations[v]` chain rather than more ad-hoc back-filling.
 
 ## Not doing
+
+- **Cost estimate** (a price per stock sheet, totals per material). Not needed:
+  the cutlist's sheet counts are what gets bought.
 
 - **Arbitrary angles** (mitres, tapers, angled sides). This breaks the
   axis-aligned assumption in `bounds`, `snapping` and `nesting` simultaneously.

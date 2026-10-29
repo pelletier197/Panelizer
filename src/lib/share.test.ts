@@ -35,6 +35,7 @@ const design = (over: Partial<Design> = {}): Design => ({
   precision: DEFAULT_PRECISION,
   kerf: DEFAULT_KERF,
   margin: DEFAULT_MARGIN,
+  cutStyle: 'guillotine',
   ...over,
 })
 

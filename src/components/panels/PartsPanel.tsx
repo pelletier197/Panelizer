@@ -8,6 +8,8 @@ import { Button } from '../ui/Button'
 import { Hint, Section, Swatch } from '../ui/Panel'
 import { PartNames } from '../ui/PartNames'
 import { cx } from '../ui/cx'
+import { treeChild, treeGroup } from '../ui/tree'
+import { TreeBranch } from '../ui/TreeBranch'
 
 type PartRow = ReturnType<typeof buildParts>[number]
 
@@ -199,13 +201,8 @@ function GroupRow({
   return (
     <>
       <tr
-        className={cx(
-          'cursor-pointer transition-colors',
-          // An open group reads as a header for the rows it owns: it keeps the
-          // raised surface and drops its bottom rule so it joins onto them.
-          open ? 'bg-surface-2' : 'border-b border-edge/60 hover:bg-surface-2',
-          selected && 'bg-accent/20 hover:bg-accent/25',
-        )}
+        // An open group reads as a header for the rows it owns (see ui/tree).
+        className={cx('cursor-pointer', treeGroup({ open, highlighted: selected }))}
         onClick={onSelect}
         {...tip.trigger}
       >
@@ -233,7 +230,7 @@ function GroupRow({
           )}
         </td>
         <td className={cx(NUM, 'text-ink-dim')}>{row.quantity}</td>
-        <td className={cx(TXT, 'overflow-hidden font-medium text-ink')}>
+        <td className={cx(TXT, 'overflow-hidden py-1.5 font-medium text-ink')}>
           <PartNames names={row.parts} />
         </td>
         <td className={cx(NUM, 'whitespace-nowrap')}>
@@ -275,12 +272,7 @@ function ChildRow({
 }) {
   return (
     <tr
-      className={cx(
-        'cursor-pointer bg-bg/60 text-[12px] transition-colors hover:bg-surface-2',
-        selected && 'bg-accent/20 hover:bg-accent/25',
-        last && 'border-b border-edge-strong',
-        panel.hidden && 'text-ink-faint',
-      )}
+      className={cx('cursor-pointer', treeChild({ last, highlighted: selected }), panel.hidden && 'text-ink-faint')}
       onClick={onSelect}
     >
       <td className="pl-1">
@@ -290,13 +282,13 @@ function ChildRow({
           label={panel.hidden ? 'Show panel' : 'Hide panel'}
         />
       </td>
-      {/* The rail runs down the chevron column, tying every child to its group. */}
-      <td>
-        <span className="ml-[6px] block h-6 w-px bg-edge-strong" />
-      </td>
+      <td />
       <td className={cx(NUM, 'text-ink-faint')}>{index + 1}</td>
-      <td className={cx(TXT, 'overflow-hidden text-ink-dim')} colSpan={3}>
-        {name}
+      <td className={cx(TXT, 'overflow-hidden py-1')} colSpan={3}>
+        <span className="flex min-w-0 items-center">
+          <TreeBranch />
+          <span className="truncate">{name}</span>
+        </span>
       </td>
       <td />
     </tr>

@@ -42,6 +42,7 @@ const design = (over: Partial<Design> = {}): Design => ({
   precision: DEFAULT_PRECISION,
   kerf: DEFAULT_KERF,
   margin: DEFAULT_MARGIN,
+  cutStyle: 'guillotine',
   ...over,
 })
 
@@ -152,6 +153,13 @@ describe('parse — back-filling older files', () => {
     expect(d.precision).toBe(DEFAULT_PRECISION)
     expect(d.kerf).toBe(DEFAULT_KERF)
     expect(d.margin).toBe(DEFAULT_MARGIN)
+    // Files from before the setting existed get saw-friendly layouts.
+    expect(d.cutStyle).toBe('guillotine')
+  })
+
+  it('keeps a free cut style, and rejects an unknown one', () => {
+    expect(parse(JSON.stringify({ panels: [], cutStyle: 'free' })).cutStyle).toBe('free')
+    expect(parse(JSON.stringify({ panels: [], cutStyle: 'laser' })).cutStyle).toBe('guillotine')
   })
 
   it('remaps a panel pointing at a missing material onto a valid one', () => {

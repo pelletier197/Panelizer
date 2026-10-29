@@ -8,6 +8,7 @@ import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
 import type { PanelPatch } from '../lib/resize'
+import type { CutStyle } from '../lib/nesting'
 import { rotatePanels } from '../lib/rotate'
 import { createMaterial, findMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
@@ -55,6 +56,7 @@ const pickDesign = (s: Design): Design => ({
   precision: s.precision,
   kerf: s.kerf,
   margin: s.margin,
+  cutStyle: s.cutStyle,
 })
 
 /** How far (mm, along X) a duplicate or paste lands from its source, so the
@@ -207,6 +209,7 @@ interface DesignState extends Design {
   fixPrecision: () => void
   setKerf: (mm: number) => void
   setMargin: (mm: number) => void
+  setCutStyle: (style: CutStyle) => void
   loadDesign: (design: Design) => void
   clear: () => void
 }
@@ -547,6 +550,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
     setKerf: (kerf) => commit({ kerf: Math.max(0, kerf) }),
     setMargin: (margin) => commit({ margin: Math.max(0, margin) }),
+    setCutStyle: (cutStyle) => commit({ cutStyle }),
 
     loadDesign: (design) => commit({ ...pickDesign(design), selectedIds: [] }),
 

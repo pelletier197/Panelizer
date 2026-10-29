@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { generateCutlist } from '../../../lib/nesting'
+import { generateCutlist, type CutlistResult } from '../../../lib/nesting'
+import type { NestRequest, NestResponse } from '../../../lib/nesting.worker'
 import { buildParts, type PartRow } from '../../../lib/parts'
 import { useDesignStore } from '../../../store/designStore'
 
@@ -22,12 +23,69 @@ export interface MissingStock {
   count: number
 }
 
+const EMPTY: CutlistResult = { groups: [], unplaced: [] }
+
+/** Start the packing worker, or null where workers aren't available (the
+ *  caller then packs on the main thread). */
+function startWorker(): Worker | null {
+  try {
+    return new Worker(new URL('../../../lib/nesting.worker.ts', import.meta.url), { type: 'module' })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The nested cutlist, packed in a Web Worker so trying several layouts on a big
+ * design never freezes the page. Only packs while `enabled` (the cutlist is
+ * open) — there's no point re-packing on every edit, let alone every drag
+ * frame, while nobody is looking. While a new layout is on its way the previous
+ * one stays up, flagged `pending`.
+ */
+function useNesting(enabled: boolean, ...args: Parameters<typeof generateCutlist>) {
+  const [state, setState] = useState<{ result: CutlistResult; pending: boolean }>({ result: EMPTY, pending: true })
+  const worker = useRef<Worker | null | undefined>(undefined)
+  const latest = useRef(0)
+
+  // The worker is started on first use and stopped with the component.
+  useEffect(() => () => worker.current?.terminate(), [])
+
+  const [panels, materials, stocks, kerf, margin, options] = args
+  const style = options?.style
+
+  useEffect(() => {
+    if (!enabled) return
+    const request = [panels, materials, stocks, kerf, margin, { style }] as Parameters<typeof generateCutlist>
+    const id = ++latest.current
+
+    if (worker.current === undefined) {
+      worker.current = startWorker()
+      if (worker.current) {
+        worker.current.onmessage = ({ data }: MessageEvent<NestResponse>) => {
+          // Drop answers to requests that have since been replaced.
+          if (data.id === latest.current) setState({ result: data.result, pending: false })
+        }
+      }
+    }
+
+    if (worker.current) {
+      setState((s) => (s.pending ? s : { ...s, pending: true }))
+      worker.current.postMessage({ id, args: request } satisfies NestRequest)
+    } else {
+      setState({ result: generateCutlist(...request), pending: false })
+    }
+  }, [enabled, panels, materials, stocks, kerf, margin, style])
+
+  return state
+}
+
 /**
  * Everything the cutlist view derives from the design: the nested result, the
- * parts roll-up, the grain groupings, and the three flavours of unplaced part.
- * Pure projection of the store — no UI state lives here.
+ * parts roll-up, the grain groupings, and the flavours of unplaced part.
+ * Pure projection of the store — no UI state lives here. `open` gates the
+ * (expensive) packing.
  */
-export function useCutlistModel() {
+export function useCutlistModel(open: boolean) {
   const panels = useDesignStore((s) => s.panels)
   const materials = useDesignStore((s) => s.materials)
   const stocks = useDesignStore((s) => s.stocks)
@@ -35,13 +93,12 @@ export function useCutlistModel() {
   const precision = useDesignStore((s) => s.precision)
   const kerf = useDesignStore((s) => s.kerf)
   const margin = useDesignStore((s) => s.margin)
+  const cutStyle = useDesignStore((s) => s.cutStyle)
 
   // Parts flagged "already cut" are dropped before nesting, but still listed in
   // the grain editor (dimmed) so they can be re-enabled.
-  const result = useMemo(
-    () => generateCutlist(panels.filter((p) => !p.excludeFromCutlist), materials, stocks, kerf, margin),
-    [panels, materials, stocks, kerf, margin],
-  )
+  const toCut = useMemo(() => panels.filter((p) => !p.excludeFromCutlist), [panels])
+  const { result, pending } = useNesting(open, toCut, materials, stocks, kerf, margin, { style: cutStyle })
 
   const parts = useMemo(
     () => buildParts(panels, materials, unit, precision),
@@ -89,18 +146,27 @@ export function useCutlistModel() {
     if (!id) return null
     const reason = reasonById.get(id)
     if (reason === 'too-big') return 'Too big for the sheet'
+    if (reason === 'grain-locked') return 'Only fits turned — its grain forbids it'
     if (reason === 'no-space') return 'Not enough stock to fit it'
     return 'No matching stock'
   }
 
+  // The printed parts list counts only what's still to cut. Built from the
+  // included panels rather than filtering `parts`, whose rows mix cut and
+  // uncut copies of the same part.
+  const cutParts = useMemo(
+    () => buildParts(toCut, materials, unit, precision),
+    [toCut, materials, unit, precision],
+  )
+
   return {
     result,
+    pending,
     parts,
+    cutParts,
     grainGroups,
     missing,
     unplacedNote,
-    tooBig: result.unplaced.filter((u) => u.reason === 'too-big'),
-    noSpace: result.unplaced.filter((u) => u.reason === 'no-space'),
   }
 }
 
