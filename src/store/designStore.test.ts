@@ -102,6 +102,21 @@ describe('batch edits', () => {
     expect(store().past).toHaveLength(0)
   })
 
+  it('rotateSelection turns the selection as one undo step', () => {
+    useDesignStore.setState({ selectedIds: ['a', 'b'] })
+    store().rotateSelection(0, 1)
+    expect(byId('a').normal).toBe('y')
+    expect(byId('b').normal).toBe('y')
+    expect(store().past).toHaveLength(1)
+    store().undo()
+    expect(byId('a').normal).toBe('z')
+  })
+
+  it('rotateSelection with nothing selected records nothing', () => {
+    store().rotateSelection(1, 1)
+    expect(store().past).toHaveLength(0)
+  })
+
   it('removePanels drops panels and their selection together', () => {
     useDesignStore.setState({ selectedIds: ['a', 'b'] })
     store().removePanels(['a'])

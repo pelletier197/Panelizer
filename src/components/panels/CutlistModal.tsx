@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { useDesignStore } from '../../store/designStore'
 import { Button } from '../ui/Button'
+import { Kbd } from '../ui/Kbd'
+import { formatKeys, KEYS } from '../ui/keys'
 import { useDragResize } from '../../hooks/useDragResize'
 import { usePersistentState } from '../../hooks/usePersistentState'
 import { CutResult } from './cutlist/CutResult'
@@ -70,11 +72,14 @@ export function CutlistModal() {
       >
         <header className="flex h-13 shrink-0 items-center gap-4 border-b border-edge bg-surface px-4 print:hidden">
           <h2 className="m-0 flex-1 text-base font-semibold">Cutlist</h2>
-          <Button onClick={() => window.print()}>Print</Button>
+          <Button onClick={() => window.print()}>
+            Print
+            <Kbd keys={KEYS.print} />
+          </Button>
           {/* Close is fenced off behind a divider so it can't be fat-fingered
               while reaching for Print. */}
           <span className="h-6 w-px bg-edge" />
-          <Button variant="ghost" icon aria-label="Close" onClick={() => setOpen(false)}>
+          <Button variant="ghost" icon aria-label="Close" title={`Close (${formatKeys(KEYS.cancel)})`} onClick={() => setOpen(false)}>
             ✕
           </Button>
         </header>

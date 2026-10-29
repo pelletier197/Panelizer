@@ -27,7 +27,7 @@ export function PartsPanel() {
   const materials = useDesignStore((s) => s.materials)
   const unit = useDesignStore((s) => s.unit)
   const selectedIds = useDesignStore((s) => s.selectedIds)
-  const select = useDesignStore((s) => s.select)
+  const selectInBox = useDesignStore((s) => s.selectInBox)
   const setHidden = useDesignStore((s) => s.setHidden)
   const precision = useDesignStore((s) => s.precision)
   const rows = useMemo(() => buildParts(panels, materials, unit, precision), [panels, materials, unit, precision])
@@ -44,11 +44,14 @@ export function PartsPanel() {
 
   const copyCsv = () => navigator.clipboard.writeText(partsToCsv(rows, unit))
 
-  // Clicking a group row selects (and so highlights) its panels. Each click
-  // steps to the next one, so identical panels can all be found.
-  const cycle = (ids: string[]) => {
-    const at = ids.findIndex((id) => selectedIds.includes(id))
-    select(ids[(at + 1) % ids.length])
+  // Clicking a row selects its panels — the whole group at once, ready for a
+  // batch edit. Shift+click adds them to the selection, or takes them out if
+  // they're all already in it (the same toggle as Shift+click in the viewport).
+  // Hidden panels are skipped, as everywhere else.
+  const pick = (ids: string[], e: React.MouseEvent) => {
+    if (!e.shiftKey) return selectInBox(ids, 'replace')
+    const allIn = ids.every((id) => selectedIds.includes(id))
+    selectInBox(ids, allIn ? 'remove' : 'add')
   }
 
   return (
@@ -105,7 +108,7 @@ export function PartsPanel() {
                   allHidden={allHidden}
                   selected={r.ids.some((id) => selectedIds.includes(id))}
                   onToggleOpen={() => toggleExpanded(key)}
-                  onSelect={() => cycle(r.ids)}
+                  onSelect={(e) => pick(r.ids, e)}
                   onToggleHidden={() => setHidden(r.ids, !allHidden)}
                 >
                   {open &&
@@ -120,7 +123,7 @@ export function PartsPanel() {
                           index={i}
                           last={i === r.ids.length - 1}
                           selected={selectedIds.includes(id)}
-                          onSelect={() => select(id)}
+                          onSelect={(e) => pick([id], e)}
                           onToggleHidden={() => setHidden([id], !child.hidden)}
                         />
                       )
@@ -161,8 +164,8 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 /** A grouped parts row: visibility eye, expand chevron (multi-part groups
- *  only), the shared dimensions. Clicking the row cycles the selection through
- *  its panels. Its expanded child rows are passed in as `children` so they sit
+ *  only), the shared dimensions. Clicking the row selects all of its panels.
+ *  Its expanded child rows are passed in as `children` so they sit
  *  directly beneath it in the table body. */
 function GroupRow({
   row,
@@ -181,13 +184,17 @@ function GroupRow({
   allHidden: boolean
   selected: boolean
   onToggleOpen: () => void
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
   onToggleHidden: () => void
   children?: React.ReactNode
 }) {
   const fmt = (mm: number) => formatMeasurement(mm, unit)
   const expandable = row.quantity > 1
-  const tip = useTooltip(expandable ? 'Click to cycle matching panels; use ▸ to list them' : 'Click to select')
+  const tip = useTooltip(
+    expandable
+      ? 'Click to select all of them · Shift+click to add · ▸ lists them one by one'
+      : 'Click to select · Shift+click to add',
+  )
 
   return (
     <>
@@ -263,7 +270,7 @@ function ChildRow({
   index: number
   last: boolean
   selected: boolean
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
   onToggleHidden: () => void
 }) {
   return (

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button } from './Button'
 import { cx } from './cx'
+import { Kbd } from './Kbd'
+import { KEYS } from './keys'
 import { registerConfirmHost, type PendingConfirm } from './useConfirm'
 
 /** Mount once, near the app root. Renders whichever confirmation is pending.
@@ -51,7 +53,12 @@ export function ConfirmHost() {
           {request.body}
         </div>
         <div className="flex shrink-0 justify-end gap-3 border-t border-edge px-4 py-3">
-          {!request.dismissOnly && <Button onClick={() => settle(false)}>Cancel</Button>}
+          {!request.dismissOnly && (
+            <Button onClick={() => settle(false)}>
+              Cancel
+              <Kbd keys={KEYS.cancel} />
+            </Button>
+          )}
           {/* An informational dialog's button only dismisses it — it isn't the
               primary action, and styling it as one competes with whatever the
               body is actually offering (the share dialog's Copy, say). */}
@@ -61,6 +68,7 @@ export function ConfirmHost() {
             onClick={() => settle(true)}
           >
             {request.confirmLabel ?? 'Continue'}
+            <Kbd keys={KEYS.confirm} />
           </Button>
         </div>
       </div>

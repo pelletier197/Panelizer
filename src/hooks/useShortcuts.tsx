@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useDesignStore, type Tool } from '../store/designStore'
 import { useConfirm } from '../components/ui/useConfirm'
+import { formatKeys, KEYS } from '../components/ui/keys'
 import { frameView } from '../components/viewport/frameView'
 
 /** Whether a keystroke should be left to the focused field rather than treated
@@ -44,18 +45,19 @@ export const SHORTCUTS: { group: string; items: { keys: string; action: string }
   {
     group: 'Keyboard',
     items: [
-      { keys: 'Ctrl+Z', action: 'Undo (in the move/resize box: cancel that drag)' },
-      { keys: 'Ctrl+Y / Ctrl+Shift+Z', action: 'Redo' },
-      { keys: 'Ctrl+A', action: 'Select all visible panels' },
-      { keys: 'Ctrl+I', action: 'Invert selection' },
-      { keys: 'Esc', action: 'Cancel the pick in progress, then deselect' },
-      { keys: 'Ctrl+C / Ctrl+V', action: 'Copy selection / paste copies' },
-      { keys: 'Ctrl+D', action: 'Duplicate selection' },
-      { keys: 'Del / Backspace', action: 'Delete selection' },
-      { keys: 'F', action: 'Frame the selection (or the whole design)' },
-      { keys: 'H / Alt+H', action: 'Hide selection / show all hidden panels' },
+      { keys: KEYS.undo, action: 'Undo (in the move/resize box: cancel that drag)' },
+      { keys: `${KEYS.redo} / Ctrl+Shift+Z`, action: 'Redo' },
+      { keys: KEYS.selectAll, action: 'Select all visible panels' },
+      { keys: KEYS.invert, action: 'Invert selection' },
+      { keys: KEYS.cancel, action: 'Cancel the pick in progress, then deselect' },
+      { keys: `${KEYS.copy} / ${KEYS.paste}`, action: 'Copy selection / paste copies' },
+      { keys: KEYS.duplicate, action: 'Duplicate selection' },
+      { keys: `${KEYS.delete} / Backspace`, action: 'Delete selection' },
+      { keys: `${KEYS.rotate} / Shift+${KEYS.rotate}`, action: 'Turn the selection 90° around the vertical (Y)' },
+      { keys: KEYS.frame, action: 'Frame the selection (or the whole design)' },
+      { keys: `${KEYS.hide} / ${KEYS.showAll}`, action: 'Hide selection / show all hidden panels' },
       { keys: '1 – 4', action: 'Move, Snap point, Resize, Measure' },
-      { keys: '?', action: 'Show this list' },
+      { keys: KEYS.help, action: 'Show this list' },
     ],
   },
 ]
@@ -79,7 +81,7 @@ export function useCheatSheet() {
                 <tbody>
                   {items.map((s) => (
                     <tr key={s.keys} className="border-b border-edge last:border-0">
-                      <td className="py-1.5 pr-4 align-top font-mono whitespace-nowrap text-ink">{s.keys}</td>
+                      <td className="py-1.5 pr-4 align-top font-mono whitespace-nowrap text-ink">{formatKeys(s.keys)}</td>
                       <td className="py-1.5">{s.action}</td>
                     </tr>
                   ))}
@@ -138,6 +140,12 @@ export function useShortcuts() {
           const chosen = new Set(store.selectedIds)
           const selected = store.panels.filter((p) => chosen.has(p.id))
           frameView(selected.length > 0 ? selected : store.panels)
+          return true
+        }
+        // Turning around the vertical is by far the most common turn; the X / Z
+        // turns are buttons in the panel editor.
+        if (e.code === 'KeyR') {
+          store.rotateSelection(1, e.shiftKey ? -1 : 1)
           return true
         }
         if (e.code === 'KeyH') {

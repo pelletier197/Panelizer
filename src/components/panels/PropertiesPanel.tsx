@@ -1,19 +1,26 @@
+import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Axis, Panel } from '../../types/panel'
+import type { Panel } from '../../types/panel'
 import { useDesignStore } from '../../store/designStore'
+import { rotatePanels } from '../../lib/rotate'
 import { MeasurementInput } from '../ui/MeasurementInput'
 import { Button } from '../ui/Button'
 import { CONTROL, Field, SelectField } from '../ui/Field'
 import { Hint, Section } from '../ui/Panel'
-
-const ORIENTATIONS: { value: Axis; label: string }[] = [
-  { value: 'x', label: 'Upright side (thickness ← → X)' },
-  { value: 'y', label: 'Horizontal shelf (thickness ↑ ↓ Y)' },
-  { value: 'z', label: 'Back / door (thickness front-back Z)' },
-]
+import { Kbd } from '../ui/Kbd'
+import { KEYS } from '../ui/keys'
 
 /** Sentinel `<select>` value shown when the selected panels disagree. */
 const MIXED = ''
+
+function RotateIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 4v4h-4" />
+    </svg>
+  )
+}
 
 /** A titled block of measurement fields inside the panel editor. */
 function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
@@ -32,10 +39,12 @@ function shared<T>(panels: Panel[], read: (p: Panel) => T): T | undefined {
 }
 
 /** Editor for the selection. A single panel shows every field; several panels
- *  show the fields that make sense in bulk (name, material, orientation, face
- *  size, thickness), with a differing value shown as `Mixed` and an edit applied to
- *  all of them in one undo step. Thickness lives here on purpose — it is the
- *  one dimension the viewport won't let you drag. */
+ *  show the fields that make sense in bulk (name, material, face size,
+ *  thickness), with a differing value shown as `Mixed` and an edit applied to
+ *  all of them in one undo step. Orientation is changed by quarter turns about
+ *  a world axis rather than picked from a list — a turn is predictable, keeps
+ *  the grain on the wood, and works on a whole selection. Thickness lives here
+ *  on purpose — it is the one dimension the viewport won't let you drag. */
 export function PropertiesPanel() {
   const selected = useDesignStore(
     useShallow((s) => s.panels.filter((p) => s.selectedIds.includes(p.id))),
@@ -46,6 +55,24 @@ export function PropertiesPanel() {
   const updatePanels = useDesignStore((s) => s.updatePanels)
   const removePanels = useDesignStore((s) => s.removePanels)
   const duplicatePanels = useDesignStore((s) => s.duplicatePanels)
+  const rotateSelection = useDesignStore((s) => s.rotateSelection)
+  const setRotatePreview = useDesignStore((s) => s.setRotatePreview)
+  // Shift flips a rotate button's direction, on click and in its preview.
+  const shiftHeld = useDesignStore((s) => s.boxKeyHeld)
+  const [hoveredTurn, setHoveredTurn] = useState<0 | 1 | 2 | null>(null)
+
+  // While a rotate button is hovered, ghost the selection where that turn
+  // would put it. Recomputed after a click too, so the ghost always shows the
+  // *next* turn, and cleared when the pointer leaves or the panel unmounts.
+  useEffect(() => {
+    if (hoveredTurn === null || selected.length === 0) {
+      setRotatePreview([])
+      return
+    }
+    const patches = new Map(rotatePanels(selected, hoveredTurn, shiftHeld ? -1 : 1).map((x) => [x.id, x.patch]))
+    setRotatePreview(selected.map((p) => ({ ...p, ...patches.get(p.id) })))
+  }, [hoveredTurn, shiftHeld, selected, setRotatePreview])
+  useEffect(() => () => setRotatePreview([]), [setRotatePreview])
 
   if (selected.length === 0) {
     return (
@@ -64,7 +91,6 @@ export function PropertiesPanel() {
 
   const name = shared(selected, (p) => p.name)
   const material = shared(selected, (p) => p.materialId)
-  const normal = shared(selected, (p) => p.normal)
   const length = shared(selected, (p) => p.length)
   const width = shared(selected, (p) => p.width)
   const thickness = shared(selected, (p) => p.thickness)
@@ -93,11 +119,13 @@ export function PropertiesPanel() {
       title={single ? 'Panel' : `${selected.length} panels`}
       action={
         <div className="flex gap-1.5">
-          <Button size="sm" title="Duplicate (Ctrl+D)" onClick={() => duplicatePanels(ids)}>
+          <Button size="sm" onClick={() => duplicatePanels(ids)}>
             Duplicate
+            <Kbd keys={KEYS.duplicate} />
           </Button>
-          <Button size="sm" variant="danger" title="Delete (Del)" onClick={() => removePanels(ids)}>
+          <Button size="sm" variant="danger" onClick={() => removePanels(ids)}>
             Delete
+            <Kbd keys={KEYS.delete} />
           </Button>
         </div>
       }
@@ -131,22 +159,28 @@ export function PropertiesPanel() {
         ))}
       </SelectField>
 
-      <SelectField
-        label="Orientation"
-        value={normal ?? MIXED}
-        onChange={(e) => update({ normal: e.target.value as Axis })}
-      >
-        {normal === undefined && (
-          <option value={MIXED} disabled>
-            Mixed
-          </option>
-        )}
-        {ORIENTATIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </SelectField>
+      {/* Not a <Field>: that wraps its row in a <label>, and a click on the
+          label text would press the first button. */}
+      <div className="flex items-center gap-2 py-[3px]">
+        <span className="text-small w-20 shrink-0 text-ink-dim">Rotate 90°</span>
+        <div className="flex flex-1 gap-1" role="group" aria-label="Rotate 90 degrees">
+          {(['X', 'Y', 'Z'] as const).map((label, axis) => (
+            <Button
+              key={label}
+              size="sm"
+              className="flex-1"
+              title={`Turn 90° around ${label} · Shift+click turns the other way`}
+              onClick={(e) => rotateSelection(axis as 0 | 1 | 2, e.shiftKey ? -1 : 1)}
+              onMouseEnter={() => setHoveredTurn(axis as 0 | 1 | 2)}
+              onMouseLeave={() => setHoveredTurn(null)}
+            >
+              <RotateIcon /> {label}
+              {/* R turns around the vertical, so only the Y button has a key. */}
+              {label === 'Y' && <Kbd keys={KEYS.rotate} />}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       <FieldGroup title="Face">
         {measure('Length', length, 'length')}

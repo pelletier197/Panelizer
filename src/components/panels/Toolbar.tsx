@@ -9,6 +9,8 @@ import { DOCUMENT_UNITS, IMPERIAL_PRECISIONS, sameSystem, type Unit } from '../.
 import { Menu, MenuChoices, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
 import { Button } from '../ui/Button'
 import { cx } from '../ui/cx'
+import { Kbd } from '../ui/Kbd'
+import { KEYS } from '../ui/keys'
 import { useConfirm } from '../ui/useConfirm'
 import { CopyField } from '../ui/CopyField'
 import { ToolHint } from '../layout/ToolHint'
@@ -157,10 +159,10 @@ export function Toolbar() {
                 <Button
                   key={section.label}
                   variant={tool === t ? 'primary' : 'ghost'}
-                  title={`${label} (${TOOL_SHORTCUTS[t]})`}
                   onClick={() => setTool(t)}
                 >
                   {label}
+                  <Kbd keys={TOOL_SHORTCUTS[t]} />
                 </Button>
               )
             }
@@ -196,7 +198,7 @@ export function Toolbar() {
                       >
                         <span className="flex items-center gap-4">
                           <span className={cx('flex-1', tool === t && 'text-accent')}>{label}</span>
-                          <kbd className="text-micro text-ink-faint">{TOOL_SHORTCUTS[t]}</kbd>
+                          <Kbd keys={TOOL_SHORTCUTS[t]} className="text-ink-faint" />
                         </span>
                       </MenuItem>
                     ))}
@@ -278,7 +280,8 @@ export function Toolbar() {
                   void showCheatSheet()
                 }}
               >
-                Shortcuts &amp; mouse controls (?)
+                Shortcuts &amp; mouse controls
+                <Kbd keys={KEYS.help} />
               </MenuItem>
 
               {DIVIDER}

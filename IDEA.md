@@ -19,57 +19,22 @@ shown as `Mixed`), duplicating a whole selection, `Ctrl+A` / `Ctrl+I` / `Esc`, a
 modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
 encloses, right→left touches, with a live preview). Still open:
 
-- **Batch rotate / mirror.** Come from §2 and are group-aware for free if they
-  pivot on the selection bounding box.
+- **Batch mirror.** From §2; group-aware for free if it pivots on the
+  selection bounding box (rotation already does).
 - **Align and distribute.** Align faces on an axis, space evenly. Shares its math
   with the array tool (§6).
 - **Select similar** (same material / same size / same part group).
-- **Parts list wiring.** A group row click calls `select(id)` and *cycles one
-  panel at a time*, so clicking a quantity-4 row selects one panel. Row click
-  should select the whole group, `Shift+click` should add, and cycling can move to
-  `Alt+click` or its own affordance.
 
 No data-model change anywhere in this section.
 
 ## 2. Rotation and orientation
 
-Orientation is a single dropdown offering the three `normal` axes, and it has
-three problems:
+Done: the orientation dropdown is gone. `Rotate 90°` buttons (X / Y / Z,
+Shift+click for the other way) and `R` / `Shift+R` turn the selection a quarter
+turn about a world axis, as a group around its bounding-box centre, keeping the
+grain on the wood (`lib/rotate.ts`). Still open:
 
-- The labels describe *roles* ("Upright side", "Back / door") but set a raw axis,
-  so they lie as soon as a panel is repurposed.
-- **Switching `normal` is not a 90° turn.** Going `x`→`y` sends thickness X→Y,
-  width Y→Z and length Z→X — a 120° rotation about the cube diagonal. The panel
-  lands somewhere nobody predicted.
-- **There is no in-plane rotation.** Turning a 600×400 shelf into 400×600 means
-  hand-typing two fields, and because `grain` is face-relative (`'length' |
-  'width'`) it silently follows the *field* rather than the wood, so the physical
-  grain direction flips without saying so.
-
-**Proposal: one primitive — rotate 90° about a world axis.** Replace the dropdown
-with three buttons (`⟲X ⟲Y ⟲Z`, Shift for counter-clockwise). Each is a pure
-permutation, expressible as a lookup table beside `AXIS_FIELD` in `geometry.ts`.
-Rotating about Y (X→Z, Z→−X) works out to:
-
-| old `normal` | new `normal` | face dimensions |
-| --- | --- | --- |
-| `x` | `z` | unchanged |
-| `y` | `y` | length ↔ width |
-| `z` | `x` | unchanged |
-
-X and Z get the same treatment — three small tables, no runtime trigonometry.
-What falls out:
-
-- Every orientation stays reachable, always one predictable 90° step at a time,
-  and the steps compose.
-- In-plane rotation is free (rotating about a panel's own normal is exactly the
-  length/width swap). **The same patch must swap `grain`** so the physical grain
-  stays put.
-- It generalises to a multi-selection: rotate about the selection bounding-box
-  centre and permute positions too. A single panel pivots on its own centre.
-- Re-run snapping afterwards so a rotated panel re-lands on its neighbours.
-- Hotkeys `R` / `Shift+R` in the viewport, so orientation stops being
-  sidebar-only.
+- Re-run snapping after a turn so a rotated panel re-lands on its neighbours.
 
 **Mirror** belongs to the same family and is about fifteen lines: reflect the
 selection across a plane through its bounding-box centre (`x → 2c − x`). Model
@@ -78,8 +43,8 @@ the left side of a cabinet, mirror it to the right.
 ## 3. Keyboard shortcuts
 
 Done: the keymap lives in `hooks/useShortcuts.tsx` (`?` lists it, mouse
-controls included), with `F` to frame and `H` / `Alt+H` to hide and show. Still
-missing: `R` / `Shift+R` once rotation (§2) exists.
+controls included), with `F` to frame, `H` / `Alt+H` to hide and show, and
+`R` / `Shift+R` to rotate.
 
 ## 4. Camera views and orthographic mode
 

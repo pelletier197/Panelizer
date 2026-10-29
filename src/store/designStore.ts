@@ -8,6 +8,7 @@ import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
 import type { PanelPatch } from '../lib/resize'
+import { rotatePanels } from '../lib/rotate'
 import { createMaterial, findMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
 import { loadFromStorage, saveToStorage } from '../lib/persistence'
@@ -92,6 +93,11 @@ interface DesignState extends Design {
   /** Whether Shift (the box-select key) is down. While it is, the move gizmo
    *  stands aside so a Shift+drag always draws a box. Transient UI state. */
   boxKeyHeld: boolean
+  /** Where the selection would land if the hovered rotate button were
+   *  pressed, drawn as ghosts in the viewport. Empty when nothing is hovered.
+   *  Transient UI state — never part of the design. */
+  rotatePreview: Panel[]
+  setRotatePreview: (panels: Panel[]) => void
   setBoxKeyHeld: (held: boolean) => void
   /** Apply a box-select: `add` the caught panels to the selection, `remove`
    *  them from it, or `replace` it. Hidden panels are never selected. */
@@ -157,6 +163,10 @@ interface DesignState extends Design {
   /** Copy panels (offset so they don't hide the originals) and select the
    *  copies, in one undo step. */
   duplicatePanels: (ids: string[]) => void
+  /** Turn the selection a quarter turn about world axis `about` (0=X, 1=Y,
+   *  2=Z), as a group around its centre, in one undo step. `dir` 1 is
+   *  counter-clockwise looking down the axis, −1 the other way. */
+  rotateSelection: (about: 0 | 1 | 2, dir: 1 | -1) => void
   /** Panels copied with Ctrl+C, as they were at copy time. In-app only (not
    *  the system clipboard), transient, and never undone. */
   clipboard: Panel[]
@@ -286,6 +296,7 @@ export const useDesignStore = create<DesignState>((set, get) => {
     selectedIds: [],
     boxPreview: [],
     boxKeyHeld: false,
+    rotatePreview: [],
     snapHints: [],
     gesture: null,
     tool: 'move',
@@ -391,6 +402,11 @@ export const useDesignStore = create<DesignState>((set, get) => {
       addCopies(get().panels.filter((p) => wanted.has(p.id)), COPY_OFFSET)
     },
 
+    rotateSelection: (about, dir) => {
+      const chosen = new Set(get().selectedIds)
+      get().commitPanelPatches(rotatePanels(get().panels.filter((p) => chosen.has(p.id)), about, dir))
+    },
+
     copySelection: () => {
       const { panels, selectedIds } = get()
       const chosen = new Set(selectedIds)
@@ -403,6 +419,10 @@ export const useDesignStore = create<DesignState>((set, get) => {
       if (clipboard.length === 0) return
       addCopies(clipboard, COPY_OFFSET * (pasteCount + 1))
       set({ pasteCount: pasteCount + 1 })
+    },
+
+    setRotatePreview: (rotatePreview) => {
+      if (rotatePreview.length > 0 || get().rotatePreview.length > 0) set({ rotatePreview })
     },
 
     setBoxKeyHeld: (boxKeyHeld) => {
