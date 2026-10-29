@@ -6,7 +6,7 @@ import { useDesignStore } from '../../store/designStore'
  * Corner HUD showing the live delta of the current move/resize gesture, kept
  * out of the main view. While dragging it's a read-only readout that updates
  * every frame; on release it becomes an input so an exact amount can be typed.
- * Enter (or clicking away, which blurs) commits; Escape reverts. Commit/cancel
+ * Enter (or clicking away, which blurs) commits; Escape or Ctrl+Z reverts. Commit/cancel
  * fire once — Enter blurs, and the guard stops the double fire.
  */
 export function GestureReadout() {
@@ -58,7 +58,13 @@ export function GestureReadout() {
             if (e.key === 'Enter') {
               e.preventDefault()
               commit()
-            } else if (e.key === 'Escape') {
+            } else if (
+              e.key === 'Escape' ||
+              // The gesture isn't committed while this box is open, so the
+              // global undo has nothing to undo yet — Ctrl+Z here means "undo
+              // the drag I just made", which is exactly a cancel.
+              ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z')
+            ) {
               e.preventDefault()
               cancel()
             }

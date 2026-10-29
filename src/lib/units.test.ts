@@ -122,10 +122,28 @@ describe('evaluateMeasurement', () => {
     expect(evalMm('1 ft')?.explicitUnit).toBe('inch')
   })
 
-  it('folds left to right with no precedence', () => {
+  it('adds and subtracts left to right', () => {
     expect(evalMm('30+15+2-3')?.mm).toBeCloseTo(44, 10)
-    // strictly left-to-right: (2 + 3) * 4, NOT 2 + (3 * 4)
-    expect(evalMm('2+3*4')?.mm).toBeCloseTo(20, 10)
+  })
+
+  it('multiplies and divides before adding and subtracting (issue #3)', () => {
+    expect(evalMm('2+3*4')?.mm).toBeCloseTo(14, 10)
+    expect(evalMm('100-60/2')?.mm).toBeCloseTo(70, 10)
+    expect(evalMm('10*2+5*3')?.mm).toBeCloseTo(35, 10)
+    // The reported case: 25 5/8 - (3 * 1/2) = 24 1/8.
+    expect(evalMm('25 5/8 - 3 * 1/2', 0, 'inch')?.mm).toBeCloseTo(24.125 * IN, 8)
+    expect(evalMm('25 5/8-3*1/2', 0, 'inch')?.mm).toBeCloseTo(24.125 * IN, 8)
+  })
+
+  it('chains products left to right', () => {
+    // Spaced: an unspaced `/` doubles as the fraction bar.
+    expect(evalMm('600 / 2 / 3')?.mm).toBeCloseTo(100, 10)
+    expect(evalMm('10*3/2')?.mm).toBeCloseTo(15, 10)
+  })
+
+  it('applies a leading operator to the current value, then the rest by precedence', () => {
+    expect(evalMm('/2+10', 100)?.mm).toBeCloseTo(60, 10)
+    expect(evalMm('+3*2', 100)?.mm).toBeCloseTo(106, 10)
   })
 
   it('starts from the current value when it leads with an operator', () => {
@@ -183,11 +201,18 @@ describe('evaluateMeasurement', () => {
 })
 
 describe('formatMeasurement', () => {
-  it('renders metric as trimmed decimals', () => {
+  it('renders metric as trimmed decimals, to a tenth of a millimetre', () => {
     expect(formatMeasurement(24, 'mm')).toBe('24')
-    expect(formatMeasurement(24.4, 'mm')).toBe('24')
+    expect(formatMeasurement(24.4, 'mm')).toBe('24.4')
+    expect(formatMeasurement(24.44, 'mm')).toBe('24.4')
+    expect(formatMeasurement(299.99999, 'mm')).toBe('300')
     expect(formatMeasurement(100, 'cm')).toBe('10')
     expect(formatMeasurement(105, 'cm')).toBe('10.5')
+    expect(formatMeasurement(2.6, 'cm')).toBe('0.26')
+  })
+
+  it('shows a fine kerf as typed (issue #5)', () => {
+    expect(formatMeasurement(2.6, 'mm')).toBe('2.6')
   })
 
   it('renders whole inches without a fraction', () => {

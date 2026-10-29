@@ -5,10 +5,6 @@ import type { Material } from './materials'
 
 /**
  * Characterization tests for the parts-list roll-up and its CSV export.
- *
- * Note: `partsToCsv` has a known escaping bug (an embedded `"` in a name is not
- * doubled). It is pinned below as CURRENT behaviour so the refactor cannot
- * change it by accident — fixing it is tracked as a separate, opt-in task.
  */
 
 const PLY: Material = { id: 'ply', name: 'Plywood', color: '#d9b380' }
@@ -133,7 +129,7 @@ describe('partsToCsv', () => {
     const rows = buildParts([panel(), panel()], MATERIALS, 'mm', 16)
     const lines = partsToCsv(rows, 'mm').split('\n')
     expect(lines).toHaveLength(2)
-    expect(lines[1]).toBe('2,"Part","600","400","18",Plywood')
+    expect(lines[1]).toBe('2,"Part","600","400","18","Plywood"')
   })
 
   it('quotes inch fractions so the slash survives the CSV', () => {
@@ -146,11 +142,16 @@ describe('partsToCsv', () => {
     expect(partsToCsv([], 'mm').split('\n')).toHaveLength(1)
   })
 
-  it('KNOWN BUG (pinned): does not escape an embedded quote in a name', () => {
-    // Tracked as a separate opt-in fix. Pinned so the refactor is proven not to
-    // be what changed it. A correct CSV would double the inner quote.
+  it('doubles an embedded quote in a name', () => {
     const rows = buildParts([panel({ name: 'The "Big" Side' })], MATERIALS, 'mm', 16)
     const line = partsToCsv(rows, 'mm').split('\n')[1]
-    expect(line).toContain('"The "Big" Side"')
+    expect(line).toContain('"The ""Big"" Side"')
+  })
+
+  it('quotes the material so a comma or inch mark in its name survives', () => {
+    const odd: Material = { id: 'odd', name: 'Ply, 3/4"', color: '#fff' }
+    const rows = buildParts([panel({ materialId: 'odd' })], [odd], 'mm', 16)
+    const line = partsToCsv(rows, 'mm').split('\n')[1]
+    expect(line.endsWith(',"Ply, 3/4"""')).toBe(true)
   })
 })

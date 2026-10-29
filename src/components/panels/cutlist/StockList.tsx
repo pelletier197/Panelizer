@@ -6,10 +6,17 @@ import { MeasurementInput } from '../../ui/MeasurementInput'
 import { Button } from '../../ui/Button'
 import { CONTROL, Field } from '../../ui/Field'
 import { Hint, Section, Swatch } from '../../ui/Panel'
+import { MenuChoices } from '../../ui/Menu'
+import type { CutStyle } from '../../../lib/nesting'
 import { CheckIcon, PencilIcon } from './icons'
 
+const CUT_STYLES: { value: CutStyle; label: string }[] = [
+  { value: 'guillotine', label: 'Saw-friendly' },
+  { value: 'free', label: 'Tightest (CNC)' },
+]
+
 /**
- * Kerf/margin settings plus the sheet-goods inventory. Each stock row collapses
+ * Kerf/margin/cut-style settings plus the sheet-goods inventory. Each stock row collapses
  * to a one-line summary unless it's the one being edited — a fresh sheet always
  * needs sizing, so adding one drops straight into edit mode.
  */
@@ -20,6 +27,8 @@ export function StockList({ unit, precision }: { unit: Unit; precision: number }
   const margin = useDesignStore((s) => s.margin)
   const setKerf = useDesignStore((s) => s.setKerf)
   const setMargin = useDesignStore((s) => s.setMargin)
+  const cutStyle = useDesignStore((s) => s.cutStyle)
+  const setCutStyle = useDesignStore((s) => s.setCutStyle)
   const addStock = useDesignStore((s) => s.addStock)
   const updateStock = useDesignStore((s) => s.updateStock)
   const removeStock = useDesignStore((s) => s.removeStock)
@@ -35,8 +44,24 @@ export function StockList({ unit, precision }: { unit: Unit; precision: number }
   return (
     <>
       <Section title="Settings">
-        <MeasurementInput label="Kerf" value={kerf} unit={unit} precision={precision} min={0} snap onChange={setKerf} />
-        <MeasurementInput label="Margin" value={margin} unit={unit} precision={precision} min={0} snap onChange={setMargin} />
+        {/* Not snapped to the working grid: blades and trims come in sizes
+            like 2.6 mm that a 1 mm (or 1/16") grid would round away. */}
+        <MeasurementInput label="Kerf" value={kerf} unit={unit} precision={precision} min={0} onChange={setKerf} />
+        <MeasurementInput label="Margin" value={margin} unit={unit} precision={precision} min={0} onChange={setMargin} />
+
+        <div className="mt-2.5">
+          <MenuChoices<CutStyle>
+            className=""
+            options={CUT_STYLES}
+            value={cutStyle}
+            onChange={setCutStyle}
+          />
+          <Hint>
+            {cutStyle === 'guillotine'
+              ? 'Every cut runs straight across, edge to edge — what a table saw or track saw can do.'
+              : 'Parts interlock for the least waste. Some layouts need a CNC or plunge cuts.'}
+          </Hint>
+        </div>
       </Section>
 
       <Section
@@ -167,7 +192,7 @@ function StockSummary({
   return (
     // Same row treatment as the parts and grain tables: separators, hover, and
     // every number tabular so sheet sizes line up down the list.
-    <div className="group flex items-center gap-1.5 border-b border-edge/60 py-1 text-[13px] transition-colors last:border-b-0 hover:bg-surface-2">
+    <div className="group flex items-center gap-2 border-b border-edge/60 py-1.5 text-[13px] transition-colors last:border-b-0 hover:bg-surface-2">
       <Swatch color={material?.color} />
       <span className="min-w-0 flex-1 truncate text-ink">{material?.name}</span>
       <span className="shrink-0 text-ink-dim tabular-nums">{fmt(stock.thickness)}</span>

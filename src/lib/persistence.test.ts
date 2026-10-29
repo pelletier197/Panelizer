@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_KERF,
   DEFAULT_MARGIN,
-  loadFromStorage,
+  DEFAULT_NAME,
+  designFilename,
+  emptyDesign,
   parse,
-  saveToStorage,
   serialize,
   type Design,
 } from './persistence'
@@ -13,11 +14,9 @@ import { defaultMaterials } from './materials'
 import type { Panel } from '../types/panel'
 
 /**
- * Characterization tests for save/load/migrate.
- *
- * The refactor plans to collapse the duplicated default-Design literal into one
- * `defaultDesign()` helper, so the back-fill defaults are pinned exactly here.
- * The environment is `node`, so localStorage is stubbed per-test.
+ * Characterization tests for the design file format: serialize, parse, and the
+ * back-fill of fields older files lack. (Saving to the browser lives in
+ * projects.ts and is tested there.)
  */
 
 let seq = 0
@@ -35,6 +34,7 @@ const panel = (over: Partial<Panel> = {}): Panel => ({
 })
 
 const design = (over: Partial<Design> = {}): Design => ({
+  name: 'Cabinet',
   panels: [panel()],
   materials: defaultMaterials(),
   stocks: [],
@@ -42,24 +42,8 @@ const design = (over: Partial<Design> = {}): Design => ({
   precision: DEFAULT_PRECISION,
   kerf: DEFAULT_KERF,
   margin: DEFAULT_MARGIN,
+  cutStyle: 'guillotine',
   ...over,
-})
-
-/** Minimal in-memory localStorage stand-in. */
-function stubStorage() {
-  const map = new Map<string, string>()
-  const store = {
-    getItem: (k: string) => map.get(k) ?? null,
-    setItem: (k: string, v: string) => void map.set(k, v),
-    removeItem: (k: string) => void map.delete(k),
-    clear: () => map.clear(),
-  }
-  vi.stubGlobal('localStorage', store)
-  return map
-}
-
-beforeEach(() => {
-  vi.unstubAllGlobals()
 })
 
 describe('serialize', () => {
@@ -100,6 +84,38 @@ describe('parse — validation', () => {
   it('accepts an empty panels array', () => {
     expect(parse(JSON.stringify({ panels: [] })).panels).toEqual([])
   })
+
+  it('drops panels whose geometry is unusable, keeping the rest', () => {
+    const raw = {
+      panels: [
+        panel({ name: 'ok' }),
+        { ...panel(), length: 'wide' },
+        { ...panel(), width: -5 },
+        { ...panel(), normal: 'w' },
+        { ...panel(), position: [0, 0] },
+        { ...panel(), position: [0, null, 0] },
+        null,
+      ],
+    }
+    const d = parse(JSON.stringify(raw))
+    expect(d.panels.map((p) => p.name)).toEqual(['ok'])
+  })
+
+  it('repairs a missing id and name rather than dropping the panel', () => {
+    const raw = { panels: [{ ...panel(), id: undefined, name: 42 }] }
+    const [p] = parse(JSON.stringify(raw)).panels
+    expect(typeof p.id).toBe('string')
+    expect(p.id).not.toBe('')
+    expect(p.name).toBe('Panel')
+  })
+
+  it('falls back to defaults for unreadable settings', () => {
+    const d = parse(JSON.stringify({ panels: [], unit: 'furlong', precision: 0, kerf: -1, margin: 'x' }))
+    expect(d.unit).toBe('mm')
+    expect(d.precision).toBe(DEFAULT_PRECISION)
+    expect(d.kerf).toBe(DEFAULT_KERF)
+    expect(d.margin).toBe(DEFAULT_MARGIN)
+  })
 })
 
 describe('parse — back-filling older files', () => {
@@ -120,6 +136,13 @@ describe('parse — back-filling older files', () => {
     expect(d.precision).toBe(DEFAULT_PRECISION)
     expect(d.kerf).toBe(DEFAULT_KERF)
     expect(d.margin).toBe(DEFAULT_MARGIN)
+    // Files from before the setting existed get saw-friendly layouts.
+    expect(d.cutStyle).toBe('guillotine')
+  })
+
+  it('keeps a free cut style, and rejects an unknown one', () => {
+    expect(parse(JSON.stringify({ panels: [], cutStyle: 'free' })).cutStyle).toBe('free')
+    expect(parse(JSON.stringify({ panels: [], cutStyle: 'laser' })).cutStyle).toBe('guillotine')
   })
 
   it('remaps a panel pointing at a missing material onto a valid one', () => {
@@ -144,50 +167,30 @@ describe('parse — back-filling older files', () => {
   })
 })
 
-describe('storage', () => {
-  it('returns an empty design when storage is empty', () => {
-    stubStorage()
-    const d = loadFromStorage()
-    expect(d.panels).toEqual([])
-    expect(d.stocks).toEqual([])
-    expect(d.materials).toEqual(defaultMaterials())
-    expect(d.unit).toBe('mm')
-    expect(d.precision).toBe(DEFAULT_PRECISION)
-    expect(d.kerf).toBe(DEFAULT_KERF)
-    expect(d.margin).toBe(DEFAULT_MARGIN)
+describe('project name', () => {
+  it('round-trips through a file', () => {
+    expect(parse(JSON.stringify(serialize(design({ name: 'Kitchen island' })))).name).toBe('Kitchen island')
   })
 
-  it('round-trips a saved design', () => {
-    stubStorage()
-    saveToStorage(design({ unit: 'inch', kerf: 5 }))
-    const d = loadFromStorage()
-    expect(d.unit).toBe('inch')
-    expect(d.kerf).toBe(5)
-    expect(d.panels).toHaveLength(1)
+  it('back-fills a default for files from before names existed, or a blank one', () => {
+    expect(parse(JSON.stringify({ panels: [] })).name).toBe(DEFAULT_NAME)
+    expect(parse(JSON.stringify({ panels: [], name: '   ' })).name).toBe(DEFAULT_NAME)
+    expect(parse(JSON.stringify({ panels: [], name: 42 })).name).toBe(DEFAULT_NAME)
   })
 
-  it('falls back to an empty design on corrupt stored JSON', () => {
-    const map = stubStorage()
-    map.set('panelizer.autosave', '{ broken')
-    expect(loadFromStorage().panels).toEqual([])
+  it('is part of an empty design', () => {
+    expect(emptyDesign().name).toBe(DEFAULT_NAME)
+    expect(emptyDesign().panels).toEqual([])
+  })
+})
+
+describe('designFilename', () => {
+  it('turns a name into a safe file name', () => {
+    expect(designFilename('Kitchen Island')).toBe('kitchen-island.panelizer.json')
+    expect(designFilename('Étagère  / v2!')).toBe('etagere-v2.panelizer.json')
   })
 
-  it('swallows a failing setItem (autosave is best-effort)', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => null,
-      setItem: () => {
-        throw new Error('QuotaExceeded')
-      },
-    })
-    expect(() => saveToStorage(design())).not.toThrow()
-  })
-
-  it('falls back to an empty design when storage is unavailable', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => {
-        throw new Error('unavailable')
-      },
-    })
-    expect(loadFromStorage().panels).toEqual([])
+  it('falls back when nothing usable is left', () => {
+    expect(designFilename('???')).toBe('design.panelizer.json')
   })
 })

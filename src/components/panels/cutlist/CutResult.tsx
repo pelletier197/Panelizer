@@ -6,6 +6,7 @@ import { SheetSvg } from './SheetSvg'
 import type { MissingStock } from './useCutlistModel'
 import { Button } from '../../ui/Button'
 import { Hint, Swatch } from '../../ui/Panel'
+import { cx } from '../../ui/cx'
 
 /** Longest sheet drawn this wide (px); everything else scales to match. On
  *  paper the sheets go wider so every part's label + size stays legible. */
@@ -16,6 +17,7 @@ const PRINT_SHEET_MAX_PX = 680
  *  print-only parts table. */
 export function CutResult({
   result,
+  pending,
   parts,
   missing,
   unit,
@@ -27,6 +29,9 @@ export function CutResult({
   printing,
 }: {
   result: CutlistResult
+  /** A newer layout is being worked out; `result` is the previous one. */
+  pending: boolean
+  /** Only the parts still to cut (already-cut ones are left out). */
   parts: PartRow[]
   missing: MissingStock[]
   unit: Unit
@@ -37,16 +42,25 @@ export function CutResult({
   hideTip: () => void
   printing: boolean
 }) {
-  const panels = useDesignStore((s) => s.panels)
+  const updatePanels = useDesignStore((s) => s.updatePanels)
   const fmt = (mm: number) => formatMeasurement(mm, unit)
-  const includedOf = (ids: string[]) => !panels.find((p) => p.id === ids[0])?.excludeFromCutlist
 
   const tooBig = result.unplaced.filter((u) => u.reason === 'too-big')
+  const grainLocked = result.unplaced.filter((u) => u.reason === 'grain-locked')
   const noSpace = result.unplaced.filter((u) => u.reason === 'no-space')
 
   return (
-    <main className="min-w-0 flex-1 overflow-y-auto p-4">
-      {result.groups.length === 0 && result.unplaced.length === 0 && (
+    <main
+      className={cx('min-w-0 flex-1 overflow-y-auto p-4 transition-opacity', pending && 'opacity-60')}
+      aria-busy={pending}
+    >
+      {pending && (
+        <p className="text-micro mt-0 mb-2 text-ink-dim print:hidden" role="status">
+          Laying out sheets…
+        </p>
+      )}
+
+      {!pending && result.groups.length === 0 && result.unplaced.length === 0 && (
         <Hint>Add sheet goods on the left to lay out the cut.</Hint>
       )}
 
@@ -104,6 +118,28 @@ export function CutResult({
         </section>
       )}
 
+      {grainLocked.length > 0 && (
+        <section className="mb-6 rounded border border-danger/40 bg-danger/10 p-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h3 className="m-0 text-sm font-semibold text-danger">Fits only if turned</h3>
+            <Button size="sm" onClick={() => updatePanels(grainLocked.map((u) => u.panelId), { grain: 'none' })}>
+              Allow turning
+            </Button>
+          </div>
+          <Hint>
+            These parts would fit the sheet turned 90°, but their grain direction forbids it. Allow turning
+            if the grain doesn't matter for them, or add a bigger sheet:
+          </Hint>
+          <ul className="m-0 list-disc pl-5 text-sm text-ink-dim">
+            {grainLocked.map((u) => (
+              <li key={u.panelId}>
+                {u.name} — {u.materialName} · {fmt(u.thickness)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {noSpace.length > 0 && (
         <section className="mb-6 rounded border border-danger/40 bg-danger/10 p-3">
           <h3 className="mt-0 mb-1 text-sm font-semibold text-danger">Not enough stock</h3>
@@ -135,19 +171,17 @@ export function CutResult({
             </tr>
           </thead>
           <tbody>
-            {parts
-              .filter((row) => includedOf(row.ids))
-              .map((row, i) => (
-                <tr key={i}>
-                  <td>{row.quantity}×</td>
-                  <td>{partNames(row.parts)}</td>
-                  <td>
-                    {fmt(row.length)} × {fmt(row.width)}
-                  </td>
-                  <td>{fmt(row.thickness)}</td>
-                  <td>{row.material}</td>
-                </tr>
-              ))}
+            {parts.map((row, i) => (
+              <tr key={i}>
+                <td>{row.quantity}×</td>
+                <td>{partNames(row.parts)}</td>
+                <td>
+                  {fmt(row.length)} × {fmt(row.width)}
+                </td>
+                <td>{fmt(row.thickness)}</td>
+                <td>{row.material}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </section>

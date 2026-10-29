@@ -1,16 +1,21 @@
 import { useRef } from 'react'
 import type { Panel } from '../../types/panel'
-import { useDesignStore, type Tool } from '../../store/designStore'
-import { downloadDesign, parse } from '../../lib/persistence'
+import { currentDesign, useDesignStore, type Tool } from '../../store/designStore'
+import { TOOL_SHORTCUTS, useCheatSheet } from '../../hooks/useShortcuts'
+import { downloadDesign } from '../../lib/persistence'
 import { designToLink } from '../../lib/share'
 import { defaultThinThickness } from '../../lib/panel'
 import { DOCUMENT_UNITS, IMPERIAL_PRECISIONS, sameSystem, type Unit } from '../../lib/units'
 import { Menu, MenuChoices, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
 import { Button } from '../ui/Button'
 import { cx } from '../ui/cx'
+import { Kbd } from '../ui/Kbd'
+import { KEYS } from '../ui/keys'
 import { useConfirm } from '../ui/useConfirm'
 import { CopyField } from '../ui/CopyField'
 import { ToolHint } from '../layout/ToolHint'
+import { ProjectSwitcher } from '../layout/ProjectSwitcher'
+import { useImportFiles } from '../layout/useImportFiles'
 
 /** Quick-add presets so a carcass can be roughed out in a few clicks. Each sets
  *  the orientation and a typical size; everything stays editable afterwards.
@@ -40,12 +45,10 @@ const TOOL_SECTIONS: { label: string; tools: { tool: Tool; label: string }[] }[]
 const DIVIDER = <div className="my-1 border-t border-edge" />
 
 export function Toolbar() {
-  const panels = useDesignStore((s) => s.panels)
-  const materials = useDesignStore((s) => s.materials)
-  const stocks = useDesignStore((s) => s.stocks)
+  // Only emptiness is needed to render; export and share read the whole design
+  // at click time, so a drag doesn't re-render the toolbar every frame.
+  const empty = useDesignStore((s) => s.panels.length === 0)
   const unit = useDesignStore((s) => s.unit)
-  const kerf = useDesignStore((s) => s.kerf)
-  const margin = useDesignStore((s) => s.margin)
   const setUnit = useDesignStore((s) => s.setUnit)
   const convertUnit = useDesignStore((s) => s.convertUnit)
   const precision = useDesignStore((s) => s.precision)
@@ -54,12 +57,10 @@ export function Toolbar() {
   const tool = useDesignStore((s) => s.tool)
   const setTool = useDesignStore((s) => s.setTool)
   const addPanel = useDesignStore((s) => s.addPanel)
-  const loadDesign = useDesignStore((s) => s.loadDesign)
   const fixPrecision = useDesignStore((s) => s.fixPrecision)
-  const clear = useDesignStore((s) => s.clear)
   const fileInput = useRef<HTMLInputElement>(null)
+  const showCheatSheet = useCheatSheet()
   const confirm = useConfirm()
-  const empty = panels.length === 0
 
   // Changing the document unit converts the geometry onto the new unit's grid.
   // Crossing measuring systems (mm↔inch) is lossy — every size snaps to the
@@ -86,7 +87,7 @@ export function Toolbar() {
   // one predictable path, and the link is always there to select by hand.
   const share = async (close: () => void) => {
     close()
-    const link = await designToLink({ panels, materials, stocks, unit, precision, kerf, margin })
+    const link = await designToLink(currentDesign())
 
     await confirm({
       title: 'Share this design',
@@ -104,18 +105,9 @@ export function Toolbar() {
     })
   }
 
-  const handleImport = async (file: File) => {
-    try {
-      loadDesign(parse(await file.text()))
-    } catch (error) {
-      await confirm({
-        title: 'Could not import that file',
-        body: error instanceof Error ? error.message : 'Could not read that file.',
-        confirmLabel: 'OK',
-        dismissOnly: true,
-      })
-    }
-  }
+  // A single design opens as a new project; a backup or several files are
+  // added to the projects list (see useImportFiles).
+  const importFiles = useImportFiles()
 
   return (
     <>
@@ -123,7 +115,8 @@ export function Toolbar() {
           room between them, but the members of a cluster belong together and
           look adrift if given the same. */}
       <header className="flex h-13 shrink-0 items-center border-b border-edge bg-surface px-4 print:hidden">
-        <img src="/Panelizer/logo.png" alt="Panelizer" className="mr-4 h-5 w-auto opacity-90" />
+        <img src="/Panelizer/logo.png" alt="Panelizer" className="mr-2 h-5 w-auto opacity-90" />
+        <ProjectSwitcher />
 
         <Menu label="+ Add">
           {(close) => (
@@ -161,6 +154,7 @@ export function Toolbar() {
                   onClick={() => setTool(t)}
                 >
                   {label}
+                  <Kbd keys={TOOL_SHORTCUTS[t]} />
                 </Button>
               )
             }
@@ -194,7 +188,10 @@ export function Toolbar() {
                           close()
                         }}
                       >
-                        <span className={cx(tool === t && 'text-accent')}>{label}</span>
+                        <span className="flex items-center gap-4">
+                          <span className={cx('flex-1', tool === t && 'text-accent')}>{label}</span>
+                          <Kbd keys={TOOL_SHORTCUTS[t]} className="text-ink-faint" />
+                        </span>
                       </MenuItem>
                     ))}
                   </MenuList>
@@ -243,7 +240,7 @@ export function Toolbar() {
               <MenuItem
                 disabled={empty}
                 onClick={() => {
-                  downloadDesign({ panels, materials, stocks, unit, precision, kerf, margin })
+                  downloadDesign(currentDesign())
                   close()
                 }}
               >
@@ -269,26 +266,14 @@ export function Toolbar() {
               >
                 Fix precision
               </MenuItem>
-
-              {DIVIDER}
-
               <MenuItem
-                danger
-                disabled={empty}
-                onClick={async () => {
+                onClick={() => {
                   close()
-                  if (!empty) {
-                    const ok = await confirm({
-                      title: 'Clear the whole design?',
-                      body: 'Every panel and sheet is removed. This can be undone with Ctrl+Z.',
-                      confirmLabel: 'Clear all',
-                      destructive: true,
-                    })
-                    if (ok) clear()
-                  }
+                  void showCheatSheet()
                 }}
               >
-                New (clear all)
+                Shortcuts &amp; mouse controls
+                <Kbd keys={KEYS.help} />
               </MenuItem>
             </MenuList>
           )}
@@ -299,10 +284,10 @@ export function Toolbar() {
           ref={fileInput}
           type="file"
           accept=".json,application/json"
+          multiple
           hidden
           onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleImport(file)
+            if (e.target.files?.length) void importFiles(e.target.files)
             e.target.value = '' // allow re-importing the same filename
           }}
         />

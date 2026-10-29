@@ -7,9 +7,13 @@ import type { Stock } from '../lib/stock'
 import type { Unit } from '../lib/units'
 import { createPanel, defaultThickness } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
-import { createMaterial } from '../lib/materials'
+import type { PanelPatch } from '../lib/resize'
+import type { CutStyle } from '../lib/nesting'
+import { rotatePanels } from '../lib/rotate'
+import { createMaterial, findMaterial } from '../lib/materials'
 import { createStock } from '../lib/stock'
-import { loadFromStorage, saveToStorage } from '../lib/persistence'
+import { emptyDesign, DEFAULT_NAME } from '../lib/persistence'
+import * as projects from '../lib/projects'
 
 /** Active viewport tool.
  *  - `move` / `resize` show a drag gizmo (translate / per-face resize).
@@ -17,6 +21,9 @@ import { loadFromStorage, saveToStorage } from '../lib/persistence'
 export type Tool = 'move' | 'move-snap' | 'resize' | 'measure'
 
 type Point = [number, number, number]
+
+/** How a box-select combines with the existing selection. */
+export type BoxSelectOp = 'add' | 'remove' | 'replace'
 
 /**
  * A live move/resize gesture, surfaced in the corner readout HUD. While the
@@ -35,17 +42,28 @@ export interface Gesture {
   cancel: () => void
 }
 
-/** An undoable design snapshot. Selection and tool are transient and left out. */
-interface Snapshot {
-  panels: Panel[]
-  materials: Material[]
-  stocks: Stock[]
-  unit: Unit
-  /** Imperial working precision (fraction denominator, e.g. 16 = 1/16"). */
-  precision: number
-  kerf: number
-  margin: number
-}
+/** An undoable design snapshot: exactly the saved document. Selection and tool
+ *  are transient and left out. */
+type Snapshot = Design
+
+/** The design part of the state, picked out field by field. This is the one
+ *  place the store lists the document's fields: undo, redo and autosave all go
+ *  through it, so a field added to `Design` only needs adding here. */
+const pickDesign = (s: Design): Design => ({
+  name: s.name,
+  panels: s.panels,
+  materials: s.materials,
+  stocks: s.stocks,
+  unit: s.unit,
+  precision: s.precision,
+  kerf: s.kerf,
+  margin: s.margin,
+  cutStyle: s.cutStyle,
+})
+
+/** How far (mm, along X) a duplicate or paste lands from its source, so the
+ *  copy doesn't hide exactly behind the original. */
+const COPY_OFFSET = 30
 
 /** How many undo steps to keep. */
 const HISTORY_LIMIT = 100
@@ -58,16 +76,9 @@ export interface ToolPick {
   point: Point
 }
 
-interface DesignState {
-  panels: Panel[]
-  materials: Material[]
-  stocks: Stock[]
-  unit: Unit
-  /** Imperial working precision (fraction denominator, e.g. 16 = 1/16"); the
-   *  grid that sizes/positions snap to. Ignored in metric (always 1 mm). */
-  precision: number
-  kerf: number
-  margin: number
+/** The design document (see `Design` for its fields) plus transient UI state
+ *  and the actions that change either. */
+interface DesignState extends Design {
   /** Selected panels. Empty = nothing selected; one id = the classic single
    *  selection; several = a multi-selection (Shift+click) that moves together.
    *  The last id is the "primary" — it carries the move gizmo. */
@@ -78,19 +89,27 @@ interface DesignState {
   /** Whether orbit navigation is live. Resize handles switch this off while
    *  the pointer is on them so a face-drag never spins the camera. */
   orbitEnabled: boolean
-  /** Left-drag behaviour in the viewport: `orbit` spins the camera (default),
-   *  `select` draws a rubber-band box that selects the panels it covers.
-   *  Toggled from the corner control in the viewport. Transient UI state. */
-  dragMode: 'orbit' | 'select'
-  setDragMode: (mode: 'orbit' | 'select') => void
-  /** A completed marquee rectangle (canvas pixels) handed from the DOM overlay
-   *  to the in-canvas picker, which projects panels against it and selects.
-   *  Cleared once consumed. */
-  marqueeBox: { x: number; y: number; w: number; h: number; additive: boolean } | null
-  setMarqueeBox: (box: DesignState['marqueeBox']) => void
-  /** Replace (or, when additive, extend) the selection with a set of ids —
-   *  used by the marquee box-select. */
-  selectInBox: (ids: string[], additive: boolean) => void
+  /** Panels the box-select being dragged would catch, lit in the viewport so
+   *  the result is visible before release. Empty when no box is open.
+   *  Transient UI state. */
+  boxPreview: string[]
+  setBoxPreview: (ids: string[]) => void
+  /** Whether Shift (the box-select key) is down. While it is, the move gizmo
+   *  stands aside so a Shift+drag always draws a box. Transient UI state. */
+  boxKeyHeld: boolean
+  /** Where the selection would land if the hovered rotate button were
+   *  pressed, drawn as ghosts in the viewport. Empty when nothing is hovered.
+   *  Transient UI state — never part of the design. */
+  rotatePreview: Panel[]
+  setRotatePreview: (panels: Panel[]) => void
+  setBoxKeyHeld: (held: boolean) => void
+  /** Apply a box-select: `add` the caught panels to the selection, `remove`
+   *  them from it, or `replace` it. Hidden panels are never selected. */
+  selectInBox: (ids: string[], op: BoxSelectOp) => void
+  /** Select every visible panel. */
+  selectAll: () => void
+  /** Swap the selection for every visible panel that isn't in it. */
+  invertSelection: () => void
   /** Active snap markers for the current drag, shown in the viewport as plane
    *  guides with a label (edge / butt / middle). Empty when not snapping.
    *  Transient UI state — never persisted or undone. */
@@ -124,25 +143,44 @@ interface DesignState {
 
   addPanel: (preset?: Partial<Panel>) => void
   updatePanel: (id: string, patch: Partial<Panel>) => void
+  /** Apply the same patch to several panels in one undo step. */
+  updatePanels: (ids: string[], patch: Partial<Panel>) => void
   movePanelLive: (id: string, position: [number, number, number]) => void
   /** Live (non-persisted) move of several panels at once — the group drag. */
   movePanelsLive: (moves: { id: string; position: [number, number, number] }[]) => void
   /** Commit a group move as a single undo step. */
   commitPanelsMove: (moves: { id: string; position: [number, number, number] }[]) => void
-  resizePanelLive: (id: string, patch: Partial<Panel>) => void
+  /** Live (non-persisted) per-panel patches — one frame of a (group) resize. */
+  patchPanelsLive: (patches: PanelPatch[]) => void
+  /** Commit per-panel patches as a single undo step. */
+  commitPanelPatches: (patches: PanelPatch[]) => void
   /** Revert a deferred gesture: apply the given patches (the panels' pre-gesture
    *  fields) and drop the pending drag snapshot, WITHOUT touching undo history —
    *  nothing was committed, so this leaves the saved state untouched. Used when
    *  a move/resize typed-entry box is cancelled with Escape. */
   restorePanels: (restore: { id: string; patch: Partial<Panel> }[]) => void
-  removePanel: (id: string) => void
-  /** Remove several panels in one undo step (multi-selection delete). */
+  /** Remove panels in one undo step (single or multi-selection delete). */
   removePanels: (ids: string[]) => void
   /** Show/hide several panels in one undo step. Hidden panels render as ghosts
    *  and can't be clicked, but still count for snapping/overlaps/cutlist. */
   setHidden: (ids: string[], hidden: boolean) => void
-  duplicatePanel: (id: string) => void
-  setPanelMaterial: (panelId: string, materialId: string) => void
+  /** Copy panels (offset so they don't hide the originals) and select the
+   *  copies, in one undo step. */
+  duplicatePanels: (ids: string[]) => void
+  /** Turn the selection a quarter turn about world axis `about` (0=X, 1=Y,
+   *  2=Z), as a group around its centre, in one undo step. `dir` 1 is
+   *  counter-clockwise looking down the axis, −1 the other way. */
+  rotateSelection: (about: 0 | 1 | 2, dir: 1 | -1) => void
+  /** Panels copied with Ctrl+C, as they were at copy time. In-app only (not
+   *  the system clipboard), transient, and never undone. */
+  clipboard: Panel[]
+  /** How many times the clipboard has been pasted, so each paste lands one
+   *  step further out instead of stacking on the previous one. */
+  pasteCount: number
+  /** Copy the selection to the clipboard. */
+  copySelection: () => void
+  /** Add offset copies of the clipboard and select them, in one undo step. */
+  paste: () => void
   select: (id: string | null) => void
   /** Select from a click in the 3D scene — no-ops once if a resize drag just
    *  armed suppression, so releasing a handle doesn't select the panel under it.
@@ -173,35 +211,55 @@ interface DesignState {
   fixPrecision: () => void
   setKerf: (mm: number) => void
   setMargin: (mm: number) => void
-  loadDesign: (design: Design) => void
-  clear: () => void
+  setCutStyle: (style: CutStyle) => void
+  /** Rename the project (one undo step, like any other edit). */
+  setName: (name: string) => void
+
+  /** The open project's storage id (see lib/projects). Not part of the design:
+   *  the same design can be saved under several ids. */
+  projectId: string
+  /** Switch to a saved project. Undo history starts afresh. Returns false if
+   *  the project can't be read. */
+  openProject: (id: string) => boolean
+  /** Start a new project and switch to it — empty, keeping the current
+   *  materials and settings, or holding `design` (an import, a shared link). */
+  newProject: (design?: Design) => void
+  /** Delete a saved project; deleting the open one switches to the most recent
+   *  other project, or a new one. */
+  deleteProject: (id: string) => void
 }
 
 /** Nudge each new panel diagonally so freshly added parts don't stack exactly
  *  on top of one another and become impossible to click. */
 const spawnOffset = (index: number): [number, number, number] => [index * 30, index * 30, 0]
 
+/** Everything about a working session that belongs to one project only and
+ *  is dropped when switching: selection, history, gestures, previews. */
+const FRESH_SESSION = {
+  selectedIds: [],
+  past: [],
+  future: [],
+  dragOrigin: null,
+  gesture: null,
+  toolPick: null,
+  measurement: null,
+  snapHints: [],
+  boxPreview: [],
+  rotatePreview: [],
+} satisfies Partial<DesignState>
+
 export const useDesignStore = create<DesignState>((set, get) => {
-  const initial = loadFromStorage()
+  const initial = projects.openInitialProject()
 
-  const snapshot = (s: DesignState): Snapshot => ({
-    panels: s.panels,
-    materials: s.materials,
-    stocks: s.stocks,
-    unit: s.unit,
-    precision: s.precision,
-    kerf: s.kerf,
-    margin: s.margin,
-  })
+  const snapshot = pickDesign
 
-  // Every persisted change funnels through here so state, autosave, and the
-  // undo history stay in sync. The pre-change snapshot is pushed onto `past`
-  // and the redo stack is cleared (a fresh edit forks history). Selection is
-  // transient and intentionally left out of both autosave and history.
+  // Every persisted change funnels through here so state and the undo history
+  // stay in sync (autosave follows from the subscription below the store). The
+  // pre-change snapshot is pushed onto `past` and the redo stack is cleared (a
+  // fresh edit forks history). Selection is transient and intentionally left
+  // out of both autosave and history.
   const commit = (next: Partial<DesignState>) => {
     const current = get()
-    const merged = { ...current, ...next }
-    saveToStorage(snapshot(merged))
     // A drag's "before" is the state at its first live frame (`dragOrigin`), so
     // the whole drag is one undo step; a plain edit has no dragOrigin.
     const before = current.dragOrigin ?? snapshot(current)
@@ -224,16 +282,9 @@ export const useDesignStore = create<DesignState>((set, get) => {
   // state is pushed onto the opposite stack so the move is itself reversible.
   const applyHistory = (snap: Snapshot, from: 'past' | 'future') => {
     const current = get()
-    saveToStorage(snap)
     const ids = new Set(snap.panels.map((p) => p.id))
     set({
-      panels: snap.panels,
-      materials: snap.materials,
-      stocks: snap.stocks,
-      unit: snap.unit,
-      precision: snap.precision,
-      kerf: snap.kerf,
-      margin: snap.margin,
+      ...snap,
       selectedIds: current.selectedIds.filter((id) => ids.has(id)),
       toolPick: null,
       dragOrigin: null,
@@ -242,17 +293,50 @@ export const useDesignStore = create<DesignState>((set, get) => {
     })
   }
 
+  // Apply `fn` to the panels whose id is in `ids`, leaving the rest as-is.
+  const mapPanels = (ids: Iterable<string>, fn: (p: Panel) => Panel): Panel[] => {
+    const targets = new Set(ids)
+    return get().panels.map((p) => (targets.has(p.id) ? fn(p) : p))
+  }
+
+  // Merge each patch into its panel, leaving unpatched panels as-is.
+  const applyPatches = (patches: PanelPatch[]): Panel[] => {
+    const byId = new Map(patches.map((x) => [x.id, x.patch]))
+    return mapPanels(byId.keys(), (p) => ({ ...p, ...byId.get(p.id)! }))
+  }
+
+  // Add fresh copies of `sources`, shifted along X by `offset` mm, and select
+  // them — one undo step. Shared by duplicate and paste. A copy whose material
+  // was deleted since it was copied falls back to the first material.
+  const addCopies = (sources: Panel[], offset: number) => {
+    if (sources.length === 0) return
+    const { materials } = get()
+    const copies = sources.map((source) =>
+      createPanel({
+        ...source,
+        name: `${source.name} copy`,
+        materialId: findMaterial(materials, source.materialId).id,
+        position: [source.position[0] + offset, source.position[1], source.position[2]],
+      }),
+    )
+    commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
+  }
+
+  const visibleIds = () => get().panels.filter((p) => !p.hidden).map((p) => p.id)
+
+  // Make `id` (holding `design`) the open project.
+  const switchTo = (id: string, design: Design) => {
+    projects.setCurrentProject(id)
+    set({ ...pickDesign(design), ...FRESH_SESSION, projectId: id })
+  }
+
   return {
-    panels: initial.panels,
-    materials: initial.materials,
-    stocks: initial.stocks,
-    unit: initial.unit,
-    precision: initial.precision,
-    kerf: initial.kerf,
-    margin: initial.margin,
+    ...initial.design,
+    projectId: initial.id,
     selectedIds: [],
-    dragMode: 'orbit',
-    marqueeBox: null,
+    boxPreview: [],
+    boxKeyHeld: false,
+    rotatePreview: [],
     snapHints: [],
     gesture: null,
     tool: 'move',
@@ -264,6 +348,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
     dragOrigin: null,
     suppressSelect: false,
     cutlistOpen: false,
+    clipboard: [],
+    pasteCount: 0,
 
     setCutlistOpen: (cutlistOpen) => set({ cutlistOpen }),
 
@@ -293,8 +379,10 @@ export const useDesignStore = create<DesignState>((set, get) => {
       commit({ panels: [...get().panels, panel], selectedIds: [panel.id] })
     },
 
-    updatePanel: (id, patch) => {
-      commit({ panels: get().panels.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
+    updatePanel: (id, patch) => get().updatePanels([id], patch),
+
+    updatePanels: (ids, patch) => {
+      if (ids.length > 0) commit({ panels: mapPanels(ids, (p) => ({ ...p, ...patch })) })
     },
 
     // Live position update during a drag: no autosave (the drop commits it),
@@ -315,8 +403,10 @@ export const useDesignStore = create<DesignState>((set, get) => {
 
     // Live length/width/position update while dragging a resize face handle;
     // same non-autosaved pattern as movePanelLive.
-    resizePanelLive: (id, patch) => {
-      live(get().panels.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    patchPanelsLive: (patches) => live(applyPatches(patches)),
+
+    commitPanelPatches: (patches) => {
+      if (patches.length > 0) commit({ panels: applyPatches(patches) })
     },
 
     restorePanels: (restore) => {
@@ -327,14 +417,8 @@ export const useDesignStore = create<DesignState>((set, get) => {
       })
     },
 
-    removePanel: (id) => {
-      commit({
-        panels: get().panels.filter((p) => p.id !== id),
-        selectedIds: get().selectedIds.filter((x) => x !== id),
-      })
-    },
-
     removePanels: (ids) => {
+      if (ids.length === 0) return
       const drop = new Set(ids)
       commit({
         panels: get().panels.filter((p) => !drop.has(p.id)),
@@ -343,35 +427,54 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
 
     setHidden: (ids, hidden) => {
+      if (ids.length === 0) return
       const targets = new Set(ids)
       commit({
-        panels: get().panels.map((p) => (targets.has(p.id) ? { ...p, hidden } : p)),
+        panels: mapPanels(targets, (p) => ({ ...p, hidden })),
         // A hidden panel can't be interacted with, so drop it from any active
         // selection (keeps a stale gizmo off a ghosted mesh).
         selectedIds: hidden ? get().selectedIds.filter((x) => !targets.has(x)) : get().selectedIds,
       })
     },
 
-    duplicatePanel: (id) => {
-      const source = get().panels.find((p) => p.id === id)
-      if (!source) return
-      const copy = createPanel({
-        ...source,
-        name: `${source.name} copy`,
-        position: [source.position[0] + 30, source.position[1], source.position[2]],
-      })
-      commit({ panels: [...get().panels, copy], selectedIds: [copy.id] })
+    duplicatePanels: (ids) => {
+      const wanted = new Set(ids)
+      addCopies(get().panels.filter((p) => wanted.has(p.id)), COPY_OFFSET)
     },
 
-    setPanelMaterial: (panelId, materialId) => {
-      commit({
-        panels: get().panels.map((p) => (p.id === panelId ? { ...p, materialId } : p)),
-      })
+    rotateSelection: (about, dir) => {
+      const chosen = new Set(get().selectedIds)
+      get().commitPanelPatches(rotatePanels(get().panels.filter((p) => chosen.has(p.id)), about, dir))
     },
 
-    // Leaving select mode drops any half-drawn marquee.
-    setDragMode: (dragMode) => set({ dragMode, marqueeBox: null }),
-    setMarqueeBox: (marqueeBox) => set({ marqueeBox }),
+    copySelection: () => {
+      const { panels, selectedIds } = get()
+      const chosen = new Set(selectedIds)
+      const clipboard = panels.filter((p) => chosen.has(p.id))
+      if (clipboard.length > 0) set({ clipboard, pasteCount: 0 })
+    },
+
+    paste: () => {
+      const { clipboard, pasteCount } = get()
+      if (clipboard.length === 0) return
+      addCopies(clipboard, COPY_OFFSET * (pasteCount + 1))
+      set({ pasteCount: pasteCount + 1 })
+    },
+
+    setRotatePreview: (rotatePreview) => {
+      if (rotatePreview.length > 0 || get().rotatePreview.length > 0) set({ rotatePreview })
+    },
+
+    setBoxKeyHeld: (boxKeyHeld) => {
+      if (get().boxKeyHeld !== boxKeyHeld) set({ boxKeyHeld })
+    },
+
+    setBoxPreview: (boxPreview) => {
+      // Called on every pointer move; skip the re-render when nothing changed.
+      const current = get().boxPreview
+      if (current.length === boxPreview.length && current.every((id, i) => id === boxPreview[i])) return
+      set({ boxPreview })
+    },
 
     setSnapHints: (snapHints) => set({ snapHints }),
 
@@ -386,11 +489,26 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
     clearGesture: () => set({ gesture: null }),
 
-    selectInBox: (ids, additive) =>
-      set((state) => ({
-        selectedIds: additive ? Array.from(new Set([...state.selectedIds, ...ids])) : ids,
-        dragOrigin: null,
-      })),
+    selectInBox: (ids, op) => {
+      // Same rule as a click: a ghosted panel can't be picked.
+      const visible = new Set(visibleIds())
+      const picked = ids.filter((id) => visible.has(id))
+      const current = get().selectedIds
+      const selectedIds =
+        op === 'replace'
+          ? picked
+          : op === 'add'
+            ? Array.from(new Set([...current, ...picked]))
+            : current.filter((id) => !picked.includes(id))
+      set({ selectedIds, dragOrigin: null })
+    },
+
+    selectAll: () => set({ selectedIds: visibleIds(), dragOrigin: null }),
+
+    invertSelection: () => {
+      const current = new Set(get().selectedIds)
+      set({ selectedIds: visibleIds().filter((id) => !current.has(id)), dragOrigin: null })
+    },
 
     select: (id) => set({ selectedIds: id ? [id] : [], dragOrigin: null }),
 
@@ -469,10 +587,62 @@ export const useDesignStore = create<DesignState>((set, get) => {
     },
     setKerf: (kerf) => commit({ kerf: Math.max(0, kerf) }),
     setMargin: (margin) => commit({ margin: Math.max(0, margin) }),
+    setCutStyle: (cutStyle) => commit({ cutStyle }),
 
-    loadDesign: ({ panels, materials, stocks, unit, precision, kerf, margin }) =>
-      commit({ panels, materials, stocks, unit, precision, kerf, margin, selectedIds: [] }),
+    setName: (name) => commit({ name }),
 
-    clear: () => commit({ panels: [], stocks: [], selectedIds: [] }),
+    openProject: (id) => {
+      if (id === get().projectId) return true
+      const design = projects.loadProject(id)
+      if (!design) return false
+      switchTo(id, design)
+      return true
+    },
+
+    newProject: (design) => {
+      const current = get()
+      const fresh = design ?? {
+        ...emptyDesign(),
+        // A new project starts from the shop you already have set up: same
+        // materials and cutlist settings, nothing drawn and no sheet stock.
+        materials: current.materials,
+        unit: current.unit,
+        precision: current.precision,
+        kerf: current.kerf,
+        margin: current.margin,
+        cutStyle: current.cutStyle,
+        name: DEFAULT_NAME,
+      }
+      const id = projects.newProjectId()
+      // Saved straight away so it's in the list even before its first edit.
+      projects.saveProject(id, fresh)
+      switchTo(id, fresh)
+    },
+
+    deleteProject: (id) => {
+      projects.deleteProject(id)
+      if (id !== get().projectId) return
+      const next = projects.listProjects().find((e) => projects.loadProject(e.id))
+      const design = next && projects.loadProject(next.id)
+      if (next && design) switchTo(next.id, design)
+      else get().newProject()
+    },
   }
+})
+
+/** The design as it stands right now — for one-off reads at event time (export,
+ *  share) that shouldn't subscribe a component to every edit. */
+export const currentDesign = (): Design => pickDesign(useDesignStore.getState())
+
+// Autosave: mirror every committed design change into the open project. Live
+// drag frames (`dragOrigin` set) are skipped — the drop commits, and that
+// commit saves. Switching project is skipped too: nothing was edited, and
+// re-saving would wrongly bump the project to the top of the list.
+// Kept out of the actions so they stay plain state transitions.
+useDesignStore.subscribe((state, prev) => {
+  if (state.dragOrigin !== null || state.projectId !== prev.projectId) return
+  const next = pickDesign(state)
+  const before = pickDesign(prev)
+  const changed = (Object.keys(next) as (keyof Design)[]).some((k) => next[k] !== before[k])
+  if (changed) projects.saveProject(state.projectId, next)
 })

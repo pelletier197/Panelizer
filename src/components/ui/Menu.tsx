@@ -108,15 +108,18 @@ export function MenuChoices<T extends string | number>({
   options,
   value,
   onChange,
+  className = 'mx-3 mb-2',
 }: {
   options: { value: T; label: string }[]
   value: T
   onChange: (value: T) => void
+  /** Outer spacing; the default fits it inside a menu. */
+  className?: string
 }) {
   return (
     // A real segmented control: equal-width targets big enough to hit, sharing
     // one recessed track so the lit one reads as the current choice.
-    <div className="flex gap-1 rounded-md border border-edge bg-bg/60 p-1 mx-3 mb-2">
+    <div className={cx('flex gap-1 rounded-md border border-edge bg-bg/60 p-1', className)}>
       {options.map((o) => (
         <button
           key={o.value}

@@ -8,6 +8,8 @@ import { Button } from '../ui/Button'
 import { Hint, Section, Swatch } from '../ui/Panel'
 import { PartNames } from '../ui/PartNames'
 import { cx } from '../ui/cx'
+import { treeChild, treeGroup } from '../ui/tree'
+import { TreeBranch } from '../ui/TreeBranch'
 
 type PartRow = ReturnType<typeof buildParts>[number]
 
@@ -27,7 +29,7 @@ export function PartsPanel() {
   const materials = useDesignStore((s) => s.materials)
   const unit = useDesignStore((s) => s.unit)
   const selectedIds = useDesignStore((s) => s.selectedIds)
-  const select = useDesignStore((s) => s.select)
+  const selectInBox = useDesignStore((s) => s.selectInBox)
   const setHidden = useDesignStore((s) => s.setHidden)
   const precision = useDesignStore((s) => s.precision)
   const rows = useMemo(() => buildParts(panels, materials, unit, precision), [panels, materials, unit, precision])
@@ -44,11 +46,14 @@ export function PartsPanel() {
 
   const copyCsv = () => navigator.clipboard.writeText(partsToCsv(rows, unit))
 
-  // Clicking a group row selects (and so highlights) its panels. Each click
-  // steps to the next one, so identical panels can all be found.
-  const cycle = (ids: string[]) => {
-    const at = ids.findIndex((id) => selectedIds.includes(id))
-    select(ids[(at + 1) % ids.length])
+  // Clicking a row selects its panels — the whole group at once, ready for a
+  // batch edit. Shift+click adds them to the selection, or takes them out if
+  // they're all already in it (the same toggle as Shift+click in the viewport).
+  // Hidden panels are skipped, as everywhere else.
+  const pick = (ids: string[], e: React.MouseEvent) => {
+    if (!e.shiftKey) return selectInBox(ids, 'replace')
+    const allIn = ids.every((id) => selectedIds.includes(id))
+    selectInBox(ids, allIn ? 'remove' : 'add')
   }
 
   return (
@@ -105,7 +110,7 @@ export function PartsPanel() {
                   allHidden={allHidden}
                   selected={r.ids.some((id) => selectedIds.includes(id))}
                   onToggleOpen={() => toggleExpanded(key)}
-                  onSelect={() => cycle(r.ids)}
+                  onSelect={(e) => pick(r.ids, e)}
                   onToggleHidden={() => setHidden(r.ids, !allHidden)}
                 >
                   {open &&
@@ -120,7 +125,7 @@ export function PartsPanel() {
                           index={i}
                           last={i === r.ids.length - 1}
                           selected={selectedIds.includes(id)}
-                          onSelect={() => select(id)}
+                          onSelect={(e) => pick([id], e)}
                           onToggleHidden={() => setHidden([id], !child.hidden)}
                         />
                       )
@@ -161,8 +166,8 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 /** A grouped parts row: visibility eye, expand chevron (multi-part groups
- *  only), the shared dimensions. Clicking the row cycles the selection through
- *  its panels. Its expanded child rows are passed in as `children` so they sit
+ *  only), the shared dimensions. Clicking the row selects all of its panels.
+ *  Its expanded child rows are passed in as `children` so they sit
  *  directly beneath it in the table body. */
 function GroupRow({
   row,
@@ -181,24 +186,23 @@ function GroupRow({
   allHidden: boolean
   selected: boolean
   onToggleOpen: () => void
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
   onToggleHidden: () => void
   children?: React.ReactNode
 }) {
   const fmt = (mm: number) => formatMeasurement(mm, unit)
   const expandable = row.quantity > 1
-  const tip = useTooltip(expandable ? 'Click to cycle matching panels; use ▸ to list them' : 'Click to select')
+  const tip = useTooltip(
+    expandable
+      ? 'Click to select all of them · Shift+click to add · ▸ lists them one by one'
+      : 'Click to select · Shift+click to add',
+  )
 
   return (
     <>
       <tr
-        className={cx(
-          'cursor-pointer transition-colors',
-          // An open group reads as a header for the rows it owns: it keeps the
-          // raised surface and drops its bottom rule so it joins onto them.
-          open ? 'bg-surface-2' : 'border-b border-edge/60 hover:bg-surface-2',
-          selected && 'bg-accent/20 hover:bg-accent/25',
-        )}
+        // An open group reads as a header for the rows it owns (see ui/tree).
+        className={cx('cursor-pointer', treeGroup({ open, highlighted: selected }))}
         onClick={onSelect}
         {...tip.trigger}
       >
@@ -226,7 +230,7 @@ function GroupRow({
           )}
         </td>
         <td className={cx(NUM, 'text-ink-dim')}>{row.quantity}</td>
-        <td className={cx(TXT, 'overflow-hidden font-medium text-ink')}>
+        <td className={cx(TXT, 'overflow-hidden py-1.5 font-medium text-ink')}>
           <PartNames names={row.parts} />
         </td>
         <td className={cx(NUM, 'whitespace-nowrap')}>
@@ -263,17 +267,12 @@ function ChildRow({
   index: number
   last: boolean
   selected: boolean
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
   onToggleHidden: () => void
 }) {
   return (
     <tr
-      className={cx(
-        'cursor-pointer bg-bg/60 text-[12px] transition-colors hover:bg-surface-2',
-        selected && 'bg-accent/20 hover:bg-accent/25',
-        last && 'border-b border-edge-strong',
-        panel.hidden && 'text-ink-faint',
-      )}
+      className={cx('cursor-pointer', treeChild({ last, highlighted: selected }), panel.hidden && 'text-ink-faint')}
       onClick={onSelect}
     >
       <td className="pl-1">
@@ -283,13 +282,13 @@ function ChildRow({
           label={panel.hidden ? 'Show panel' : 'Hide panel'}
         />
       </td>
-      {/* The rail runs down the chevron column, tying every child to its group. */}
-      <td>
-        <span className="ml-[6px] block h-6 w-px bg-edge-strong" />
-      </td>
+      <td />
       <td className={cx(NUM, 'text-ink-faint')}>{index + 1}</td>
-      <td className={cx(TXT, 'overflow-hidden text-ink-dim')} colSpan={3}>
-        {name}
+      <td className={cx(TXT, 'overflow-hidden py-1')} colSpan={3}>
+        <span className="flex min-w-0 items-center">
+          <TreeBranch />
+          <span className="truncate">{name}</span>
+        </span>
       </td>
       <td />
     </tr>

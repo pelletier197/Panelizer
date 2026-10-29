@@ -25,6 +25,9 @@ interface MeasurementInputProps {
   /** Snap the committed value onto the working grid so what's shown is exactly
    *  what's stored. On for sizes and typed positions. */
   snap?: boolean
+  /** The field edits several panels that disagree: show it empty with a
+   *  `Mixed` placeholder, and leave them alone unless something is typed. */
+  mixed?: boolean
 }
 
 /**
@@ -34,22 +37,32 @@ interface MeasurementInputProps {
  * lossy fraction. Size fields snap to the unit grid on commit (What You See Is
  * What's Stored); only an edited field writes back.
  */
-export function MeasurementInput({ label, value, onChange, unit, precision, min, snap = false }: MeasurementInputProps) {
-  const [text, setText] = useState(() => formatMeasurement(value, unit))
+export function MeasurementInput({
+  label,
+  value,
+  onChange,
+  unit,
+  precision,
+  min,
+  snap = false,
+  mixed = false,
+}: MeasurementInputProps) {
+  const display = (mm: number) => (mixed ? '' : formatMeasurement(mm, unit))
+  const [text, setText] = useState(() => display(value))
   const [focused, setFocused] = useState(false)
   // Only an edited field writes back — the shown text can be a rounded display,
   // so committing an untouched field could shift the stored value.
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
-    if (!focused) setText(formatMeasurement(value, unit))
-  }, [value, unit, focused])
+    if (!focused) setText(mixed ? '' : formatMeasurement(value, unit))
+  }, [value, unit, focused, mixed])
 
   const commit = () => {
     const result = evaluateMeasurement(text, value, unit)
     // Reject unparseable input, or a unit from the other measuring system.
     if (result === null || (result.explicitUnit && !sameSystem(result.explicitUnit, unit))) {
-      setText(formatMeasurement(value, unit))
+      setText(display(value))
       return
     }
     let mm = min === undefined ? result.mm : Math.max(min, result.mm)
@@ -65,6 +78,7 @@ export function MeasurementInput({ label, value, onChange, unit, precision, min,
         inputMode="decimal"
         className={CONTROL_NUMERIC}
         value={text}
+        placeholder={mixed ? 'Mixed' : undefined}
         onChange={(e) => {
           setText(e.target.value)
           setDirty(true)
@@ -73,12 +87,13 @@ export function MeasurementInput({ label, value, onChange, unit, precision, min,
           setFocused(true)
           // Swap the compact glyph fraction for plain ASCII while editing —
           // a caret can't be moved sensibly through `¹⁄₄`.
-          setText(formatMeasurementPlain(value, unit))
+          setText(mixed ? '' : formatMeasurementPlain(value, unit))
         }}
         onBlur={() => {
           setFocused(false)
-          if (dirty) commit()
-          else setText(formatMeasurement(value, unit))
+          // A mixed field left blank means "keep each panel's own value".
+          if (dirty && !(mixed && text.trim() === '')) commit()
+          else setText(display(value))
           setDirty(false)
         }}
         onKeyDown={(e) => {

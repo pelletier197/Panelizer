@@ -3,6 +3,7 @@ import { PanelMesh } from './PanelMesh'
 import { OverlapHighlights } from './OverlapHighlights'
 import { SnapHints } from './SnapHints'
 import { ToolOverlay } from './ToolOverlay'
+import { RotatePreview } from './RotatePreview'
 
 /** The cabinet itself: one mesh per panel, plus overlap markers at joints.
  *  Purely a projection of the store — holds no state of its own. */
@@ -16,6 +17,7 @@ export function Scene() {
       <OverlapHighlights />
       <SnapHints />
       <ToolOverlay />
+      <RotatePreview />
     </>
   )
 }

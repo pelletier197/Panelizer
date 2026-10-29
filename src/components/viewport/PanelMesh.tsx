@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { Mesh } from 'three'
 import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
@@ -35,16 +35,24 @@ function singleAxis(raw: Vec3): 0 | 1 | 2 | null {
  *  attaches a translate gizmo. Dragging only moves the panel; its size (and so
  *  its thickness) is never touched here, matching the "thickness is locked in
  *  the viewport" rule. */
-export function PanelMesh({ panel }: { panel: Panel }) {
+export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   const meshRef = useRef<Mesh>(null!)
-  const selectedIds = useDesignStore((s) => s.selectedIds)
+  // Narrow subscriptions on purpose: every drag frame replaces `panels`, and
+  // subscribing to the whole list or selection would re-render every mesh in
+  // the scene each frame. Handlers read the full state at event time instead.
+  const selected = useDesignStore((s) => s.selectedIds.includes(panel.id))
+  // The last-selected panel carries the move gizmo for the whole group.
+  const isPrimary = useDesignStore((s) => s.selectedIds[s.selectedIds.length - 1] === panel.id)
+  // Caught by the box-select being dragged — a lighter version of the selected look.
+  const previewed = useDesignStore((s) => s.boxPreview.includes(panel.id))
+  // Shift means box-select; the gizmo stands aside so it can't grab the press.
+  const boxKeyHeld = useDesignStore((s) => s.boxKeyHeld)
   const sceneSelect = useDesignStore((s) => s.sceneSelect)
   const movePanelsLive = useDesignStore((s) => s.movePanelsLive)
   const commitPanelsMove = useDesignStore((s) => s.commitPanelsMove)
   const restorePanels = useDesignStore((s) => s.restorePanels)
   const clearGesture = useDesignStore((s) => s.clearGesture)
   const setSnapHints = useDesignStore((s) => s.setSnapHints)
-  const panels = useDesignStore((s) => s.panels)
   const tool = useDesignStore((s) => s.tool)
   const unit = useDesignStore((s) => s.unit)
   const precision = useDesignStore((s) => s.precision)
@@ -53,9 +61,6 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   const paint = palette()
   const gesture = useGesture()
   const hidden = panel.hidden === true
-  const selected = selectedIds.includes(panel.id)
-  // The last-selected panel carries the move gizmo for the whole group.
-  const isPrimary = selectedIds[selectedIds.length - 1] === panel.id
 
   // Positions of every selected panel frozen at pointer-down, so the whole
   // group moves rigidly by the primary's displacement.
@@ -67,7 +72,10 @@ export function PanelMesh({ panel }: { panel: Panel }) {
   const size = toMetres(panelBoxSize(panel))
   const position = toMetres(panel.position)
 
-  const selectedNow = () => panels.filter((p) => selectedIds.includes(p.id))
+  const selectedNow = () => {
+    const { panels, selectedIds } = useDesignStore.getState()
+    return panels.filter((p) => selectedIds.includes(p.id))
+  }
 
   // Apply a rigid delta to the frozen group, live (no autosave).
   const applyGroupDelta = (start: { id: string; position: Vec3 }[], d: Vec3) => {
@@ -132,6 +140,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
     ]
     axisRef.current = singleAxis(raw)
 
+    const { panels, selectedIds } = useDesignStore.getState()
     const byId = new Map(panels.map((p) => [p.id, p]))
     const proposed = start.map((s) => ({
       panel: byId.get(s.id)!,
@@ -190,7 +199,7 @@ export function PanelMesh({ panel }: { panel: Panel }) {
     const start = groupStart.current
     if (start.length === 0) return
     const primaryStart = start.find((s) => s.id === panel.id)?.position ?? panel.position
-    const primaryNow = panels.find((p) => p.id === panel.id)?.position ?? primaryStart
+    const primaryNow = useDesignStore.getState().panels.find((p) => p.id === panel.id)?.position ?? primaryStart
     const moved = Math.hypot(
       primaryNow[0] - primaryStart[0],
       primaryNow[1] - primaryStart[1],
@@ -244,12 +253,12 @@ export function PanelMesh({ panel }: { panel: Panel }) {
           transparent={hidden}
           opacity={hidden ? 0.2 : 1}
           depthWrite={!hidden}
-          emissive={selected ? paint.accent : paint.none}
-          emissiveIntensity={selected ? 0.35 : 0}
+          emissive={selected || previewed ? paint.accent : paint.none}
+          emissiveIntensity={selected ? 0.35 : previewed ? 0.2 : 0}
         />
         <Edges
           threshold={15}
-          color={selected ? paint.accent : hidden ? paint.ghostEdge : paint.panelEdge}
+          color={selected || previewed ? paint.accent : hidden ? paint.ghostEdge : paint.panelEdge}
         />
       </mesh>
 
@@ -257,13 +266,16 @@ export function PanelMesh({ panel }: { panel: Panel }) {
         <TransformControls
           object={meshRef}
           mode="translate"
+          enabled={!boxKeyHeld}
           onMouseDown={beginDrag}
           onObjectChange={dragGroup}
           onMouseUp={endDrag}
         />
       )}
 
-      {!hidden && selected && selectedIds.length === 1 && tool === 'resize' && <ResizeHandles panel={panel} />}
+      {/* Like the move gizmo, the primary carries the resize handles for the
+          whole selection. */}
+      {!hidden && selected && isPrimary && tool === 'resize' && <ResizeHandles panel={panel} />}
     </>
   )
-}
+})

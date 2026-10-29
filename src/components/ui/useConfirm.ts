@@ -10,6 +10,8 @@ export interface ConfirmRequest {
   /** Just telling the user something — drops Cancel, since there is no choice
    *  to decline. Replaces the old `alert()` calls. */
   dismissOnly?: boolean
+  /** A wider dialog, for reference content (tables) rather than a question. */
+  wide?: boolean
 }
 
 /** Internal: the pending request, plus how to answer it. */

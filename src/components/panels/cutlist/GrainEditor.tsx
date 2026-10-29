@@ -7,6 +7,8 @@ import { nextGrain } from './grainCycle'
 import { Section, Swatch } from '../../ui/Panel'
 import { PartNames } from '../../ui/PartNames'
 import { cx } from '../../ui/cx'
+import { treeChild, treeGroup } from '../../ui/tree'
+import { TreeBranch } from '../../ui/TreeBranch'
 import type { GrainGroup } from './useCutlistModel'
 
 /** How much of a size-group is in the cutlist. */
@@ -40,6 +42,7 @@ export function GrainEditor({
 }) {
   const panels = useDesignStore((s) => s.panels)
   const updatePanel = useDesignStore((s) => s.updatePanel)
+  const updatePanels = useDesignStore((s) => s.updatePanels)
   const byId = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels])
   const fmt = (mm: number) => formatMeasurement(mm, unit)
 
@@ -69,7 +72,7 @@ export function GrainEditor({
   }
 
   const setGrain = (ids: string[], grain: Grain) =>
-    ids.forEach((id) => updatePanel(id, { grain }))
+    updatePanels(ids, { grain })
 
   const cycleGroupGrain = (ids: string[]) => {
     const shared = sharedGrain(ids)
@@ -79,15 +82,15 @@ export function GrainEditor({
   }
 
   const setIncluded = (ids: string[], included: boolean) =>
-    ids.forEach((id) => updatePanel(id, { excludeFromCutlist: !included }))
+    updatePanels(ids, { excludeFromCutlist: !included })
 
   return (
     <Section title="Grain">
       {groups.map((group) => (
-        <div className="mb-3 last:mb-0" key={`${group.material}@${group.thickness}`}>
+        <div className="mb-4 last:mb-0" key={`${group.material}@${group.thickness}`}>
           {/* Stock heading: the same "header for the rows it owns" treatment the
               parts list gives an expanded group. */}
-          <div className="flex items-center gap-1.5 rounded-t border-b border-edge-strong bg-surface-2 px-1.5 py-1">
+          <div className="flex items-center gap-1.5 rounded-t border-b border-edge-strong bg-surface-2 px-2 py-1.5">
             <Swatch color={group.color} />
             <span className="min-w-0 truncate text-[13px] font-medium text-ink">{group.material}</span>
             <span className="text-small shrink-0 text-ink-dim tabular-nums">· {fmt(group.thickness)}</span>
@@ -119,9 +122,7 @@ export function GrainEditor({
                   <Fragment key={key}>
                     <tr
                       className={cx(
-                        'transition-colors',
-                        open ? 'bg-surface-2' : 'border-b border-edge/60',
-                        isHovered(row.ids) ? 'bg-accent/20' : !open && 'hover:bg-surface-2',
+                        treeGroup({ open, highlighted: isHovered(row.ids) }),
                         // An excluded part stays legible — dimmed, not struck
                         // through, so its size can still be read.
                         inclusion === 'none' && 'text-ink-faint',
@@ -149,7 +150,7 @@ export function GrainEditor({
                           </button>
                         )}
                       </td>
-                      <td className={cx('overflow-hidden py-1.5 pr-1', inclusion !== 'none' && 'text-ink')}>
+                      <td className={cx('overflow-hidden py-2 pr-1', inclusion !== 'none' && 'text-ink', open && 'font-medium')}>
                         <span className="flex min-w-0 items-center gap-1">
                           <PartNames names={row.parts} />
                           {note && (
@@ -159,8 +160,8 @@ export function GrainEditor({
                           )}
                         </span>
                       </td>
-                      <td className="py-1.5 text-right text-ink-dim tabular-nums">{row.quantity}×</td>
-                      <td className="py-1.5 pl-2 text-right whitespace-nowrap text-ink-dim tabular-nums">
+                      <td className="py-2 text-right text-ink-dim tabular-nums">{row.quantity}×</td>
+                      <td className="py-2 pl-2 text-right whitespace-nowrap text-ink-dim tabular-nums">
                         {fmt(row.length)} × {fmt(row.width)}
                       </td>
                       <td className="py-1 pl-1.5">
@@ -186,9 +187,7 @@ export function GrainEditor({
                           <tr
                             key={id}
                             className={cx(
-                              'bg-bg/60 text-[12px] transition-colors',
-                              isHovered([id]) ? 'bg-accent/20' : 'hover:bg-surface-2',
-                              i === row.ids.length - 1 && 'border-b border-edge-strong',
+                              treeChild({ last: i === row.ids.length - 1, highlighted: isHovered([id]) }),
                               !included && 'text-ink-faint',
                             )}
                             onMouseEnter={() => onHover([id])}
@@ -201,12 +200,10 @@ export function GrainEditor({
                                 tipProps={tipProps}
                               />
                             </td>
-                            {/* The rail ties every part to the row above it. */}
-                            <td className="align-middle">
-                              <span className="ml-[6px] block h-6 w-px bg-edge-strong" />
-                            </td>
-                            <td className="overflow-hidden py-1 pr-1" colSpan={3}>
+                            <td />
+                            <td className="overflow-hidden py-1.5 pr-1" colSpan={3}>
                               <span className="flex min-w-0 items-center gap-1">
+                                <TreeBranch />
                                 <span className="truncate">{row.parts[i]}</span>
                                 {childNote && (
                                   <span className="shrink-0 cursor-help text-snap-middle" {...tipProps(childNote)}>

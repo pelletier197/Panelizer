@@ -64,17 +64,21 @@ export function partNames(names: string[]): string {
 
 /** Render the parts list as CSV text (dimensions in `unit`), ready to paste
  *  into a spreadsheet. Inch fractions are quoted so the "/" survives the CSV. */
+/** One CSV text field: always quoted, with embedded quotes doubled (RFC 4180),
+ *  so commas, quotes and inch fractions in names survive. */
+const csvText = (value: string): string => `"${value.replace(/"/g, '""')}"`
+
 export function partsToCsv(rows: PartRow[], unit: Unit): string {
   const u = UNIT_SUFFIX[unit]
   const header = ['Qty', 'Part', `Length (${u})`, `Width (${u})`, `Thickness (${u})`, 'Material']
   const lines = rows.map((r) =>
     [
       r.quantity,
-      `"${partNames(r.parts)}"`,
-      `"${formatMeasurement(r.length, unit)}"`,
-      `"${formatMeasurement(r.width, unit)}"`,
-      `"${formatMeasurement(r.thickness, unit)}"`,
-      r.material,
+      csvText(partNames(r.parts)),
+      csvText(formatMeasurement(r.length, unit)),
+      csvText(formatMeasurement(r.width, unit)),
+      csvText(formatMeasurement(r.thickness, unit)),
+      csvText(r.material),
     ].join(','),
   )
   return [header.join(','), ...lines].join('\n')

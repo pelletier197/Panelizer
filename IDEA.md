@@ -13,85 +13,28 @@ break it are in [Not doing](#not-doing) with the reason.
 
 ## 1. Selection and batch editing
 
-The current multi-selection can move panels together and not much else, and the
-reason is structural rather than cosmetic: **the store has no batch mutator.**
-`updatePanel(id, patch)` calls `commit` per invocation, so any multi-panel edit
-would be N commits and N undo steps. Only `removePanels`, `setHidden` and
-`commitPanelsMove` are batch-aware. So the primitive comes first and everything
-else follows from it.
+Done: the batch primitive (`updatePanels`, one undo step), a multi-select
+inspector (material, orientation, face size and thickness, with differing values
+shown as `Mixed`), duplicating a whole selection, `Ctrl+A` / `Ctrl+I` / `Esc`, and
+modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
+encloses, right→left touches, with a live preview). Still open:
 
-- **`updatePanels(ids, patch)`** — one `commit`, one undo step. Roughly six
-  lines, and it unblocks the rest of this section.
-- **Multi-select inspector.** `PropertiesPanel` currently renders a hint sentence
-  and a Delete button for a multi-selection. It should show the same fields as a
-  single selection: a value shared by every panel displays normally, a differing
-  value displays as `Mixed`, and typing applies to all. Batch **material** and
-  batch **thickness** are the two edits people actually reach for — swapping a
-  whole carcass from 18 mm to 3/4" is currently a per-panel chore.
-- **Batch actions.** Duplicate a selection (offset copies); delete and hide
-  already work. Rotate and mirror come from §2 and are group-aware for free if
-  they pivot on the selection bounding box.
+- **Batch mirror.** From §2; group-aware for free if it pivots on the
+  selection bounding box (rotation already does).
 - **Align and distribute.** Align faces on an axis, space evenly. Shares its math
   with the array tool (§6).
-- **Marquee fixes.** Three separate problems in the box-select:
-  - It hides behind a mode toggle — `dragMode` has to be flipped orbit→select and
-    back (`ViewportControls`). A drag on empty space should just box.
-  - It is a *touch* test, not an *enclose* test (`MarqueePicker`): any panel whose
-    screen-space bounding box merely intersects the marquee is selected, and that
-    box is large for a panel seen at an angle. Enclose by default, touch on a
-    modifier.
-  - It ignores `hidden`. `sceneSelect` cannot touch a ghost panel but
-    `selectInBox` selects it happily, leaving a gizmo on an invisible mesh —
-    inconsistent with `setHidden`, which deliberately drops hidden panels from the
-    selection.
-- **Selection keys.** `Ctrl+A`, `Esc` to deselect, `Ctrl+I` to invert, and a
-  select-similar (same material / same size / same part group).
-- **Parts list wiring.** A group row click calls `select(id)` and *cycles one
-  panel at a time*, so clicking a quantity-4 row selects one panel. Row click
-  should select the whole group, `Shift+click` should add, and cycling can move to
-  `Alt+click` or its own affordance.
+- **Select similar** (same material / same size / same part group).
 
 No data-model change anywhere in this section.
 
 ## 2. Rotation and orientation
 
-Orientation is a single dropdown offering the three `normal` axes, and it has
-three problems:
+Done: the orientation dropdown is gone. `Rotate 90°` buttons (X / Y / Z,
+Shift+click for the other way) and `R` / `Shift+R` turn the selection a quarter
+turn about a world axis, as a group around its bounding-box centre, keeping the
+grain on the wood (`lib/rotate.ts`). Still open:
 
-- The labels describe *roles* ("Upright side", "Back / door") but set a raw axis,
-  so they lie as soon as a panel is repurposed.
-- **Switching `normal` is not a 90° turn.** Going `x`→`y` sends thickness X→Y,
-  width Y→Z and length Z→X — a 120° rotation about the cube diagonal. The panel
-  lands somewhere nobody predicted.
-- **There is no in-plane rotation.** Turning a 600×400 shelf into 400×600 means
-  hand-typing two fields, and because `grain` is face-relative (`'length' |
-  'width'`) it silently follows the *field* rather than the wood, so the physical
-  grain direction flips without saying so.
-
-**Proposal: one primitive — rotate 90° about a world axis.** Replace the dropdown
-with three buttons (`⟲X ⟲Y ⟲Z`, Shift for counter-clockwise). Each is a pure
-permutation, expressible as a lookup table beside `AXIS_FIELD` in `geometry.ts`.
-Rotating about Y (X→Z, Z→−X) works out to:
-
-| old `normal` | new `normal` | face dimensions |
-| --- | --- | --- |
-| `x` | `z` | unchanged |
-| `y` | `y` | length ↔ width |
-| `z` | `x` | unchanged |
-
-X and Z get the same treatment — three small tables, no runtime trigonometry.
-What falls out:
-
-- Every orientation stays reachable, always one predictable 90° step at a time,
-  and the steps compose.
-- In-plane rotation is free (rotating about a panel's own normal is exactly the
-  length/width swap). **The same patch must swap `grain`** so the physical grain
-  stays put.
-- It generalises to a multi-selection: rotate about the selection bounding-box
-  centre and permute positions too. A single panel pivots on its own centre.
-- Re-run snapping afterwards so a rotated panel re-lands on its neighbours.
-- Hotkeys `R` / `Shift+R` in the viewport, so orientation stops being
-  sidebar-only.
+- Re-run snapping after a turn so a rotated panel re-lands on its neighbours.
 
 **Mirror** belongs to the same family and is about fifteen lines: reflect the
 selection across a plane through its bounding-box centre (`x → 2c − x`). Model
@@ -99,23 +42,15 @@ the left side of a cabinet, mirror it to the right.
 
 ## 3. Keyboard shortcuts
 
-Only `Ctrl+Z` / `Ctrl+Y` exist today. `Del`, `Ctrl+D` to duplicate, arrow keys to
-nudge by one precision step, `1`–`4` for tools, `Esc` to deselect, `F` to frame
-the selection. Cheapest perceived-quality gain in the whole app, and it subsumes
-the selection keys from §1.
+Done: the keymap lives in `hooks/useShortcuts.tsx` (`?` lists it, mouse
+controls included), with `F` to frame, `H` / `Alt+H` to hide and show, and
+`R` / `Shift+R` to rotate.
 
 ## 4. Camera views and orthographic mode
 
 Navigation is free orbit only. Add Front / Side / Top / Iso presets and an
 orthographic toggle — an ortho top view makes alignment obvious without leaning
 on snapping. drei supplies most of the parts.
-
-## 5. Cost estimate
-
-Add a `price` field to `Stock`. The cutlist already computes sheets needed and
-waste, so multiplying through gives a project total and a per-material breakdown.
-One field, one line of output, and it takes Panelizer from hobby modelling to
-something you can quote from.
 
 ## 6. Array and distribute
 
@@ -137,13 +72,14 @@ from `panelBounds`. Answers "will it fit the alcove" without measuring anything.
 
 Per panel, flag which of the four face edges get banding; the parts list totals
 linear metres. Small model addition (`edges?: [boolean, boolean, boolean, boolean]`),
-real shop need.
+real shop need. Deferred: marking which edges are banded is per-panel UI work
+that costs more than the total is worth for now.
 
 ## 10. Named project slots
 
-Autosave writes a single localStorage document, so "New (clear all)" is the only
-way to start something else and it discards the previous design. Named slots
-close a real path to losing work.
+Done: projects have a name and are kept separately in localStorage
+(`lib/projects.ts`), listed newest first in the toolbar's projects menu. Imports
+and shared links open as new projects instead of replacing the open one.
 
 ## 11. Templates
 
@@ -160,18 +96,17 @@ the meshes makes the saw diagram map back onto the model.
 
 ## Carried over from the refactor
 
-Both were flagged as behaviour-changing during the `lib/`-and-viewport refactor
-and so were deliberately left out of it. Still open:
+CSV escaping is fixed, and `parse` now drops panels with unusable geometry and
+falls back on bad settings. Still open:
 
-- **CSV escaping.** `partsToCsv` (`lib/parts.ts`) wraps part names in quotes but
-  never escapes an embedded `"`, and the material field is not quoted at all — a
-  material named `Ply, 3/4"` breaks the row. Needs a test of its own, since fixing
-  it changes output.
-- **`persistence.ts` validation.** Schema parsing and migration are hand-rolled
-  and `version` / `VERSION` are unused. Not a problem today; if versioned
-  migrations grow, `zod` would give real validation.
+- **Versioned migrations.** `version` / `VERSION` are written but never read.
+  Shared links make old files a public API, so the next schema change should add
+  a `migrations[v]` chain rather than more ad-hoc back-filling.
 
 ## Not doing
+
+- **Cost estimate** (a price per stock sheet, totals per material). Not needed:
+  the cutlist's sheet counts are what gets bought.
 
 - **Arbitrary angles** (mitres, tapers, angled sides). This breaks the
   axis-aligned assumption in `bounds`, `snapping` and `nesting` simultaneously.
