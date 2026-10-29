@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteProject, listProjects, loadProject, openInitialProject, saveProject } from './projects'
+import {
+  bundleAllProjects,
+  bundleFilename,
+  deleteProject,
+  importProjects,
+  listProjects,
+  loadProject,
+  openInitialProject,
+  parseBundle,
+  saveProject,
+} from './projects'
 import { emptyDesign, serialize, type Design } from './persistence'
 import type { Panel } from '../types/panel'
 
@@ -119,5 +129,49 @@ describe('openInitialProject', () => {
     full = true
     openInitialProject()
     expect(store.has('panelizer.autosave')).toBe(true)
+  })
+})
+
+describe('backing up every project', () => {
+  it('round-trips every project through one file, keeping names, content and order', () => {
+    saveProject('a', design({ name: 'Bookshelf', panels: [panel()] }), 100)
+    saveProject('b', design({ name: 'Wardrobe', kerf: 2.6 }), 200)
+    const file = JSON.stringify(bundleAllProjects())
+
+    store.clear()
+    const items = parseBundle(file)!
+    expect(importProjects(items)).toBe(2)
+    const list = listProjects()
+    expect(list.map((p) => [p.name, p.updatedAt])).toEqual([
+      ['Wardrobe', 200],
+      ['Bookshelf', 100],
+    ])
+    expect(loadProject(list[0].id)?.kerf).toBe(2.6)
+    expect(loadProject(list[1].id)?.panels).toHaveLength(1)
+  })
+
+  it('imports alongside existing projects, never over them', () => {
+    saveProject('a', design({ name: 'Mine' }), 100)
+    const file = JSON.stringify(bundleAllProjects())
+    importProjects(parseBundle(file)!)
+    expect(listProjects().map((p) => p.name)).toEqual(['Mine', 'Mine'])
+    expect(new Set(listProjects().map((p) => p.id)).size).toBe(2)
+  })
+
+  it('is not mistaken for a single design, and vice versa', () => {
+    expect(parseBundle(JSON.stringify(serialize(design())))).toBeNull()
+  })
+
+  it('skips an unreadable project rather than failing the whole file', () => {
+    const file = JSON.stringify({
+      format: 'panelizer-projects',
+      version: 1,
+      projects: [{ updatedAt: 1, design: { nonsense: true } }, { updatedAt: 2, design: serialize(design({ name: 'Ok' })) }],
+    })
+    expect(parseBundle(file)!.map((p) => p.design.name)).toEqual(['Ok'])
+  })
+
+  it('names the backup after the day it was taken', () => {
+    expect(bundleFilename(new Date(2026, 9, 29))).toBe('panelizer-projects-2026-10-29.json')
   })
 })

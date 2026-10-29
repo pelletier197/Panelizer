@@ -159,3 +159,57 @@ export function openInitialProject(now = Date.now()): { id: string; design: Desi
   setCurrentProject(id)
   return { id, design }
 }
+
+// ---- Backing up every project at once -------------------------------------
+
+const BUNDLE_FORMAT = 'panelizer-projects'
+const BUNDLE_VERSION = 1
+
+/** Every project in one file: each design in the ordinary file format, plus
+ *  when it was last edited so the list keeps its order after a re-import. */
+export interface ProjectsBundle {
+  format: typeof BUNDLE_FORMAT
+  version: number
+  projects: { updatedAt: number; design: ReturnType<typeof serialize> }[]
+}
+
+/** A bundle of every readable project, most recent first. */
+export function bundleAllProjects(): ProjectsBundle {
+  const projects = listProjects().flatMap((entry) => {
+    const design = loadProject(entry.id)
+    return design ? [{ updatedAt: entry.updatedAt, design: serialize(design) }] : []
+  })
+  return { format: BUNDLE_FORMAT, version: BUNDLE_VERSION, projects }
+}
+
+/**
+ * The projects in a bundle file, or null if the text isn't a bundle (it may be
+ * a single design instead). Each design goes through the same checks as any
+ * imported file; one that can't be read is skipped rather than failing the
+ * whole bundle. Throws only on unreadable JSON.
+ */
+export function parseBundle(json: string): { updatedAt: number; design: Design }[] | null {
+  const data = JSON.parse(json) as Partial<ProjectsBundle>
+  if (data.format !== BUNDLE_FORMAT || !Array.isArray(data.projects)) return null
+  return data.projects.flatMap((p) => {
+    try {
+      const design = parse(JSON.stringify(p?.design))
+      const updatedAt = typeof p?.updatedAt === 'number' ? p.updatedAt : Date.now()
+      return [{ updatedAt, design }]
+    } catch {
+      return []
+    }
+  })
+}
+
+/** Save designs as new projects (fresh ids — importing never overwrites an
+ *  existing project). Returns how many were stored. */
+export function importProjects(items: { updatedAt?: number; design: Design }[], now = Date.now()): number {
+  return items.filter(({ updatedAt, design }) => saveProject(newProjectId(), design, updatedAt ?? now)).length
+}
+
+/** The file name for a backup taken on `date`: `panelizer-projects-2026-10-29.json`. */
+export function bundleFilename(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `panelizer-projects-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.json`
+}

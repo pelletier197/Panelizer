@@ -139,14 +139,19 @@ export function designFilename(name: string): string {
   return `${slug || 'design'}.panelizer.json`
 }
 
-/** Trigger a browser download of the design as a `.panelizer.json` file named
- *  after it. */
-export function downloadDesign(design: Design, filename = designFilename(design.name)): void {
-  const json = JSON.stringify(serialize(design), null, 2)
+/** Trigger a browser download of `data` as a pretty-printed JSON file. */
+export function downloadJson(data: unknown, filename: string): void {
+  const json = JSON.stringify(data, null, 2)
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
   const link = document.createElement('a')
   link.href = url
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+/** Trigger a browser download of the design as a `.panelizer.json` file named
+ *  after it. */
+export function downloadDesign(design: Design, filename = designFilename(design.name)): void {
+  downloadJson(serialize(design), filename)
 }

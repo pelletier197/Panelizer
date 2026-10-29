@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { DEFAULT_NAME } from '../../lib/persistence'
-import { listProjects, type ProjectEntry } from '../../lib/projects'
+import { useEffect, useRef, useState } from 'react'
+import { DEFAULT_NAME, downloadJson } from '../../lib/persistence'
+import { bundleAllProjects, bundleFilename, listProjects, type ProjectEntry } from '../../lib/projects'
 import { useDesignStore } from '../../store/designStore'
 import { Menu, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
 import { useConfirm } from '../ui/useConfirm'
 import { cx } from '../ui/cx'
+import { useImportFiles } from './useImportFiles'
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago", then a plain date. */
 function timeAgo(ms: number, now = Date.now()): string {
@@ -33,6 +34,8 @@ export function ProjectSwitcher() {
   const openProject = useDesignStore((s) => s.openProject)
   const deleteProject = useDesignStore((s) => s.deleteProject)
   const confirm = useConfirm()
+  const importFiles = useImportFiles()
+  const fileInput = useRef<HTMLInputElement>(null)
 
   // The browser tab shows which project is open.
   useEffect(() => {
@@ -105,13 +108,43 @@ export function ProjectSwitcher() {
                   </div>
                 ))}
               </div>
+              <div className="my-1 border-t border-edge" />
+              <MenuItem
+                onClick={() => {
+                  close()
+                  downloadJson(bundleAllProjects(), bundleFilename())
+                }}
+              >
+                Export all projects…
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  fileInput.current?.click()
+                }}
+              >
+                Import projects…
+              </MenuItem>
               <p className="text-micro m-0 max-w-64 px-3 pt-2 pb-1 text-ink-faint">
-                Kept in this browser only, and can be cleared with its data. Export to keep a copy.
+                Kept in this browser only, and can be cleared with its data. Export all to keep a backup;
+                importing adds to the list and never overwrites.
               </p>
             </MenuList>
           )
         }}
       </Menu>
+
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) void importFiles(e.target.files)
+          e.target.value = '' // allow re-importing the same filename
+        }}
+      />
     </div>
   )
 }

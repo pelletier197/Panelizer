@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { Panel } from '../../types/panel'
 import { currentDesign, useDesignStore, type Tool } from '../../store/designStore'
 import { TOOL_SHORTCUTS, useCheatSheet } from '../../hooks/useShortcuts'
-import { downloadDesign, parse } from '../../lib/persistence'
+import { downloadDesign } from '../../lib/persistence'
 import { designToLink } from '../../lib/share'
 import { defaultThinThickness } from '../../lib/panel'
 import { DOCUMENT_UNITS, IMPERIAL_PRECISIONS, sameSystem, type Unit } from '../../lib/units'
@@ -15,6 +15,7 @@ import { useConfirm } from '../ui/useConfirm'
 import { CopyField } from '../ui/CopyField'
 import { ToolHint } from '../layout/ToolHint'
 import { ProjectSwitcher } from '../layout/ProjectSwitcher'
+import { useImportFiles } from '../layout/useImportFiles'
 
 /** Quick-add presets so a carcass can be roughed out in a few clicks. Each sets
  *  the orientation and a typical size; everything stays editable afterwards.
@@ -56,7 +57,6 @@ export function Toolbar() {
   const tool = useDesignStore((s) => s.tool)
   const setTool = useDesignStore((s) => s.setTool)
   const addPanel = useDesignStore((s) => s.addPanel)
-  const newProject = useDesignStore((s) => s.newProject)
   const fixPrecision = useDesignStore((s) => s.fixPrecision)
   const fileInput = useRef<HTMLInputElement>(null)
   const showCheatSheet = useCheatSheet()
@@ -105,19 +105,9 @@ export function Toolbar() {
     })
   }
 
-  const handleImport = async (file: File) => {
-    try {
-      // An import opens as a project of its own rather than replacing this one.
-      newProject(parse(await file.text()))
-    } catch (error) {
-      await confirm({
-        title: 'Could not import that file',
-        body: error instanceof Error ? error.message : 'Could not read that file.',
-        confirmLabel: 'OK',
-        dismissOnly: true,
-      })
-    }
-  }
+  // A single design opens as a new project; a backup or several files are
+  // added to the projects list (see useImportFiles).
+  const importFiles = useImportFiles()
 
   return (
     <>
@@ -294,10 +284,10 @@ export function Toolbar() {
           ref={fileInput}
           type="file"
           accept=".json,application/json"
+          multiple
           hidden
           onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleImport(file)
+            if (e.target.files?.length) void importFiles(e.target.files)
             e.target.value = '' // allow re-importing the same filename
           }}
         />
