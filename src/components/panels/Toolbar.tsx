@@ -14,6 +14,7 @@ import { KEYS } from '../ui/keys'
 import { useConfirm } from '../ui/useConfirm'
 import { CopyField } from '../ui/CopyField'
 import { ToolHint } from '../layout/ToolHint'
+import { ProjectSwitcher } from '../layout/ProjectSwitcher'
 
 /** Quick-add presets so a carcass can be roughed out in a few clicks. Each sets
  *  the orientation and a typical size; everything stays editable afterwards.
@@ -55,9 +56,8 @@ export function Toolbar() {
   const tool = useDesignStore((s) => s.tool)
   const setTool = useDesignStore((s) => s.setTool)
   const addPanel = useDesignStore((s) => s.addPanel)
-  const loadDesign = useDesignStore((s) => s.loadDesign)
+  const newProject = useDesignStore((s) => s.newProject)
   const fixPrecision = useDesignStore((s) => s.fixPrecision)
-  const clear = useDesignStore((s) => s.clear)
   const fileInput = useRef<HTMLInputElement>(null)
   const showCheatSheet = useCheatSheet()
   const confirm = useConfirm()
@@ -107,7 +107,8 @@ export function Toolbar() {
 
   const handleImport = async (file: File) => {
     try {
-      loadDesign(parse(await file.text()))
+      // An import opens as a project of its own rather than replacing this one.
+      newProject(parse(await file.text()))
     } catch (error) {
       await confirm({
         title: 'Could not import that file',
@@ -124,7 +125,8 @@ export function Toolbar() {
           room between them, but the members of a cluster belong together and
           look adrift if given the same. */}
       <header className="flex h-13 shrink-0 items-center border-b border-edge bg-surface px-4 print:hidden">
-        <img src="/Panelizer/logo.png" alt="Panelizer" className="mr-4 h-5 w-auto opacity-90" />
+        <img src="/Panelizer/logo.png" alt="Panelizer" className="mr-2 h-5 w-auto opacity-90" />
+        <ProjectSwitcher />
 
         <Menu label="+ Add">
           {(close) => (
@@ -282,27 +284,6 @@ export function Toolbar() {
               >
                 Shortcuts &amp; mouse controls
                 <Kbd keys={KEYS.help} />
-              </MenuItem>
-
-              {DIVIDER}
-
-              <MenuItem
-                danger
-                disabled={empty}
-                onClick={async () => {
-                  close()
-                  if (!empty) {
-                    const ok = await confirm({
-                      title: 'Clear the whole design?',
-                      body: 'Every panel and sheet is removed. This can be undone with Ctrl+Z.',
-                      confirmLabel: 'Clear all',
-                      destructive: true,
-                    })
-                    if (ok) clear()
-                  }
-                }}
-              >
-                New (clear all)
               </MenuItem>
             </MenuList>
           )}

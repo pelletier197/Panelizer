@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDesignStore } from './designStore'
 import { defaultMaterials } from '../lib/materials'
+import { emptyDesign } from '../lib/persistence'
+import { listProjects } from '../lib/projects'
 import type { Panel } from '../types/panel'
 
 /**
@@ -27,12 +29,19 @@ const panel = (over: Partial<Panel> = {}): Panel => ({
 const store = () => useDesignStore.getState()
 const byId = (id: string) => store().panels.find((p) => p.id === id)!
 
+/** Designs written to a project slot, in order (index writes left out). */
 let saved: string[]
+let mem: Map<string, string>
 beforeEach(() => {
   saved = []
+  mem = new Map()
   vi.stubGlobal('localStorage', {
-    getItem: () => null,
-    setItem: (_: string, v: string) => void saved.push(v),
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      mem.set(k, v)
+      if (k.startsWith('panelizer.project.')) saved.push(v)
+    },
+    removeItem: (k: string) => void mem.delete(k),
   })
   useDesignStore.setState({
     panels: [panel({ id: 'a' }), panel({ id: 'b' }), panel({ id: 'c', hidden: true })],
@@ -231,5 +240,58 @@ describe('autosave', () => {
     expect(saved).toHaveLength(2)
     store().select('a')
     expect(saved).toHaveLength(2)
+  })
+})
+
+describe('projects', () => {
+  it('renames as an undoable, saved edit', () => {
+    store().setName('Kitchen')
+    expect(store().name).toBe('Kitchen')
+    expect(JSON.parse(saved.at(-1)!).name).toBe('Kitchen')
+    store().undo()
+    expect(store().name).not.toBe('Kitchen')
+  })
+
+  it('a new project is empty, keeps the materials, and starts a fresh history', () => {
+    store().updatePanel('a', { name: 'Side' })
+    const before = store().projectId
+    const materials = store().materials
+    store().newProject()
+    expect(store().projectId).not.toBe(before)
+    expect(store().panels).toEqual([])
+    expect(store().materials).toBe(materials)
+    expect(store().past).toEqual([])
+    expect(listProjects().map((p) => p.id)).toContain(store().projectId)
+  })
+
+  it('opening a project brings its design back, without re-saving it', () => {
+    store().updatePanel('a', { name: 'Side' })
+    const first = store().projectId
+    store().newProject()
+    const writes = saved.length
+    expect(store().openProject(first)).toBe(true)
+    expect(byId('a').name).toBe('Side')
+    expect(store().past).toEqual([])
+    expect(saved.length).toBe(writes)
+  })
+
+  it('a new project can hold an imported design', () => {
+    store().newProject({ ...emptyDesign(), name: 'Imported', panels: [panel({ id: 'x' })] })
+    expect(store().name).toBe('Imported')
+    expect(store().panels.map((p) => p.id)).toEqual(['x'])
+  })
+
+  it('deleting the open project switches to another one', () => {
+    store().updatePanel('a', { name: 'Side' })
+    const first = store().projectId
+    store().newProject()
+    const second = store().projectId
+    store().deleteProject(second)
+    expect(store().projectId).toBe(first)
+    expect(listProjects().map((p) => p.id)).not.toContain(second)
+  })
+
+  it('refuses to open a project that is gone', () => {
+    expect(store().openProject('missing')).toBe(false)
   })
 })

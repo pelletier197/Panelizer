@@ -7,7 +7,6 @@ import { DEFAULT_PRECISION } from './units'
 import { defaultMaterials, findMaterial } from './materials'
 import { DEFAULT_CUT_STYLE, type CutStyle } from './nesting'
 
-const STORAGE_KEY = 'panelizer.autosave'
 const FORMAT = 'panelizer'
 const VERSION = 1
 
@@ -15,9 +14,15 @@ const VERSION = 1
 export const DEFAULT_KERF = 3
 export const DEFAULT_MARGIN = 10
 
-/** A full design: panels, the materials they use, the sheet-good stock to nest
- *  them onto, cutlist settings, and the default display unit. */
+/** What a design is called until it's given a name. */
+export const DEFAULT_NAME = 'Untitled project'
+
+/** A full design: its name, panels, the materials they use, the sheet-good
+ *  stock to nest them onto, cutlist settings, and the default display unit. */
 export interface Design {
+  /** The project's name — shown in the toolbar and the projects list, and used
+   *  for the export filename. */
+  name: string
   panels: Panel[]
   materials: Material[]
   stocks: Stock[]
@@ -39,14 +44,29 @@ export interface DesignFile extends Design {
   version: number
 }
 
-export function serialize({ panels, materials, stocks, unit, precision, kerf, margin, cutStyle }: Design): DesignFile {
-  return { format: FORMAT, version: VERSION, unit, precision, kerf, margin, cutStyle, materials, stocks, panels }
+export function serialize({ name, panels, materials, stocks, unit, precision, kerf, margin, cutStyle }: Design): DesignFile {
+  return { format: FORMAT, version: VERSION, name, unit, precision, kerf, margin, cutStyle, materials, stocks, panels }
+}
+
+/** A fresh, empty design with every setting at its default. */
+export function emptyDesign(): Design {
+  return {
+    name: DEFAULT_NAME,
+    panels: [],
+    materials: defaultMaterials(),
+    stocks: [],
+    unit: 'mm',
+    precision: DEFAULT_PRECISION,
+    kerf: DEFAULT_KERF,
+    margin: DEFAULT_MARGIN,
+    cutStyle: DEFAULT_CUT_STYLE,
+  }
 }
 
 /** Parse a design file by its shape, not a format tag: as long as it has a
  *  panels array we try to load it (so files from any past version / name import
  *  fine). Missing materials fall back to the default; a panel pointing at a
- *  missing material is remapped to a valid one; later-added fields (grain,
+ *  missing material is remapped to a valid one; later-added fields (name, grain,
  *  stocks, precision, kerf, margin, cutStyle) are back-filled. Panel thickness is
  *  preserved as-is (it's a panel property, not the material's).
  *
@@ -74,6 +94,7 @@ export function parse(json: string): Design {
   }))
 
   return {
+    name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : DEFAULT_NAME,
     panels,
     materials,
     stocks: Array.isArray(data.stocks) ? data.stocks : [],
@@ -106,8 +127,21 @@ function isUsablePanel(p: Partial<Panel> | null): p is Panel {
   )
 }
 
-/** Trigger a browser download of the design as a `.panelizer.json` file. */
-export function downloadDesign(design: Design, filename = 'cabinet.panelizer.json'): void {
+/** A filesystem-safe file name for a design: its name, lower-cased, with runs
+ *  of anything but letters and digits turned into single dashes. */
+export function designFilename(name: string): string {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents: é → e
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return `${slug || 'design'}.panelizer.json`
+}
+
+/** Trigger a browser download of the design as a `.panelizer.json` file named
+ *  after it. */
+export function downloadDesign(design: Design, filename = designFilename(design.name)): void {
   const json = JSON.stringify(serialize(design), null, 2)
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
   const link = document.createElement('a')
@@ -115,31 +149,4 @@ export function downloadDesign(design: Design, filename = 'cabinet.panelizer.jso
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
-}
-
-export function saveToStorage(design: Design): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(design)))
-  } catch {
-    // Storage full or unavailable — autosave is best-effort, so ignore.
-  }
-}
-
-export function loadFromStorage(): Design {
-  const empty: Design = {
-    panels: [],
-    materials: defaultMaterials(),
-    stocks: [],
-    unit: 'mm',
-    precision: DEFAULT_PRECISION,
-    kerf: DEFAULT_KERF,
-    margin: DEFAULT_MARGIN,
-    cutStyle: DEFAULT_CUT_STYLE,
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? parse(raw) : empty
-  } catch {
-    return empty
-  }
 }

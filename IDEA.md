@@ -77,9 +77,9 @@ that costs more than the total is worth for now.
 
 ## 10. Named project slots
 
-Autosave writes a single localStorage document, so "New (clear all)" is the only
-way to start something else and it discards the previous design. Named slots
-close a real path to losing work.
+Done: projects have a name and are kept separately in localStorage
+(`lib/projects.ts`), listed newest first in the toolbar's projects menu. Imports
+and shared links open as new projects instead of replacing the open one.
 
 ## 11. Templates
 

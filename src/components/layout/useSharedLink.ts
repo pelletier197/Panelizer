@@ -4,18 +4,18 @@ import { useConfirm } from '../ui/useConfirm'
 import { useDesignStore } from '../../store/designStore'
 
 /**
- * Opens a design that arrived in the URL.
+ * Opens a design that arrived in the URL, as a new project of its own — so it
+ * never replaces whatever the visitor already had open.
  *
- * Always asks first: whoever follows a shared link may already have work of
- * their own autosaved, and loading over it without warning would destroy it.
- * The design is decoded *before* prompting so a corrupt link says so rather
- * than asking a question and then failing.
+ * Still asks first, so following a link never silently adds a project. The
+ * design is decoded *before* prompting so a corrupt link says so rather than
+ * asking a question and then failing.
  *
  * The token is stripped from the address bar either way, so a reload doesn't
  * keep re-asking.
  */
 export function useSharedLink() {
-  const loadDesign = useDesignStore((s) => s.loadDesign)
+  const newProject = useDesignStore((s) => s.newProject)
   const confirm = useConfirm()
 
   // React 18 mounts effects twice in development; without this the prompt
@@ -32,17 +32,13 @@ export function useSharedLink() {
         const design = await linkToDesign(token)
         clearSharedToken()
 
-        const hasWork = useDesignStore.getState().panels.length > 0
         const ok = await confirm({
-          title: 'Open shared design?',
-          body: hasWork
-            ? `This link holds a design with ${design.panels.length} panel${design.panels.length === 1 ? '' : 's'}. Opening it replaces what you have open — export first if you want to keep it.`
-            : `This link holds a design with ${design.panels.length} panel${design.panels.length === 1 ? '' : 's'}.`,
+          title: `Open “${design.name}”?`,
+          body: `This link holds a design with ${design.panels.length} panel${design.panels.length === 1 ? '' : 's'}. It opens as a new project — what you have now stays in your projects list.`,
           confirmLabel: 'Open',
-          destructive: hasWork,
         })
 
-        if (ok) loadDesign(design)
+        if (ok) newProject(design)
       } catch {
         clearSharedToken()
         await confirm({
@@ -53,5 +49,5 @@ export function useSharedLink() {
         })
       }
     })()
-  }, [confirm, loadDesign])
+  }, [confirm, newProject])
 }
