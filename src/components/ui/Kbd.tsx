@@ -6,11 +6,13 @@ import { formatKeys } from './keys'
  * without hovering or opening the cheat sheet. Takes its colour from the
  * button (`currentColor`), dimmed, so it reads on any button variant.
  */
-export function Kbd({ keys, className }: { keys: string; className?: string }) {
+export function Kbd({ keys, className, inline = false }: { keys: string; className?: string; inline?: boolean }) {
   return (
     <kbd
       className={cx(
-        'ml-1.5 inline-block rounded-xs border border-current/25 px-1 font-mono text-[10px] leading-[14px] font-normal opacity-70',
+        'inline-block rounded-xs border border-current/25 px-1 font-mono text-[10px] leading-[14px] font-normal opacity-70',
+        // After a button's label it needs a gap; inside running text it doesn't.
+        !inline && 'ml-1.5',
         className,
       )}
     >

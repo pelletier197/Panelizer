@@ -5,6 +5,7 @@ import { PartsPanel } from './components/panels/PartsPanel'
 import { CutlistModal } from './components/panels/CutlistModal'
 import { Viewport } from './components/viewport/Viewport'
 import { GestureReadout } from './components/viewport/GestureReadout'
+import { ViewportHint } from './components/viewport/ViewportHint'
 import { WebGLUnavailable } from './components/viewport/WebGLUnavailable'
 import { ResizableSidebar } from './components/layout/ResizableSidebar'
 import { ConfirmHost } from './components/ui/ConfirmDialog'
@@ -26,6 +27,7 @@ export default function App() {
           {hasWebGL() ? (
             <>
               <Viewport />
+              <ViewportHint />
               <GestureReadout />
             </>
           ) : (

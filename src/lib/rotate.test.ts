@@ -99,3 +99,57 @@ describe('rotatePanels — a group', () => {
     expect(rotatePanels([], 0, 1)).toEqual([])
   })
 })
+
+describe('rotatePanels — corner radii', () => {
+  /** World position of each rounded corner (radius > 0), as "x,y,z" sign strings. */
+  const roundedCornerSpots = (p: Panel) => {
+    const lengthAxis = [0, 1, 2].find((a) => axisField(p.normal, a as 0 | 1 | 2) === 'length')!
+    const widthAxis = [0, 1, 2].find((a) => axisField(p.normal, a as 0 | 1 | 2) === 'width')!
+    const signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]]
+    return (p.corners ?? [])
+      .map((r, i) => {
+        if (r <= 0) return null
+        const w = [0, 0, 0]
+        w[lengthAxis] = signs[i][0]
+        w[widthAxis] = signs[i][1]
+        return `${w.join(',')}=${r}`
+      })
+      .filter(Boolean)
+      .sort()
+  }
+
+  it('keeps the radii intact, and four turns bring each one home', () => {
+    for (const about of [0, 1, 2] as const) {
+      for (const dir of [1, -1] as const) {
+        const p = panel({ corners: [10, 20, 30, 40] })
+        const q = apply(p, rotatePanels([p], about, dir)[0].patch)
+        expect(q.corners!.slice().sort((a, b) => a - b)).toEqual([10, 20, 30, 40])
+        let r = p
+        for (let i = 0; i < 4; i++) r = apply(r, rotatePanels([r], about, dir)[0].patch)
+        expect(r.corners).toEqual([10, 20, 30, 40])
+      }
+    }
+  })
+
+  it("moves a radius to where the turn takes its physical corner", () => {
+    // A shelf's corner 0 sits at (−X, −Z). A +90° turn about Y takes
+    // (x, z) to (z, −x), so that corner ends up at (−X, +Z).
+    const p = panel({ corners: [10, 0, 0, 0] })
+    expect(roundedCornerSpots(p)).toEqual(['-1,0,-1=10'])
+    const q = apply(p, rotatePanels([p], 1, 1)[0].patch)
+    expect(roundedCornerSpots(q)).toEqual(['-1,0,1=10'])
+  })
+
+  it('follows the corner when a turn stands the panel up', () => {
+    // About X, +90°: (y, z) to (−z, y). The shelf's (−X, −Z) corner, at
+    // y = 0, goes to (−X, +Y) on the now-upright panel.
+    const p = panel({ corners: [10, 0, 0, 0] })
+    const q = apply(p, rotatePanels([p], 0, 1)[0].patch)
+    expect(roundedCornerSpots(q)).toEqual(['-1,1,0=10'])
+  })
+
+  it('leaves a square-cornered panel without corners', () => {
+    const [{ patch }] = rotatePanels([panel()], 0, 1)
+    expect(patch.corners).toBeUndefined()
+  })
+})

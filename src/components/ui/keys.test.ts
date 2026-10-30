@@ -13,5 +13,8 @@ describe('formatKeys', () => {
     expect(formatKeys('Ctrl+Shift+Z', true)).toBe('⌘⇧Z')
     expect(formatKeys('Del', true)).toBe('⌫')
     expect(formatKeys('F', true)).toBe('F')
+    // A modifier on its own, as in a "hold Ctrl" hint.
+    expect(formatKeys('Ctrl', true)).toBe('⌘')
+    expect(formatKeys('Shift', true)).toBe('⇧')
   })
 })

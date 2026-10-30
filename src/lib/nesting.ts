@@ -2,6 +2,7 @@ import type { Panel } from '../types/panel'
 import type { Material } from './materials'
 import type { Stock } from './stock'
 import { findMaterial } from './materials'
+import { hasRounding, sheetCornerRadii, type CornerRadii } from './rounding'
 
 /** One part placed on a sheet. Coordinates are mm from the sheet's top-left
  *  corner (margin already included); `w`/`h` are the footprint on the sheet. */
@@ -14,6 +15,9 @@ export interface Placement {
   h: number
   /** True if the part is turned 90° from its as-drawn orientation. */
   rotated: boolean
+  /** Corner radii (mm) as the part lies on the sheet, in screen order
+   *  [top-left, top-right, bottom-right, bottom-left]. Absent when square. */
+  corners?: CornerRadii
 }
 
 /** One physical sheet with the parts packed onto it. Sheets in a group may be
@@ -245,6 +249,9 @@ function commitPlacement(bin: Bin, panel: Panel, fit: Fit, margin: number, carve
     w: fit.w,
     h: fit.h,
     rotated: fit.rotated,
+    // The packing works on the part's rectangle; rounding only changes how
+    // it's drawn (and cut) within it.
+    ...(hasRounding(panel) && { corners: sheetCornerRadii(panel, fit.rotated) }),
   })
   bin.usedArea += panel.length * panel.width
 }

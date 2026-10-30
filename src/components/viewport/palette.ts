@@ -28,6 +28,8 @@ export interface ViewportPalette {
   /** Resize face tint and grab handles. */
   resize: string
   resizeHover: string
+  /** The edge a hovered / focused size field changes. */
+  fieldHighlight: string
   /** Interpenetration markers. */
   overlap: string
   /** Canvas background and floor grid. */
@@ -54,6 +56,7 @@ export function palette(): ViewportPalette {
     snapMiddle: read('--color-snap-middle'),
     resize: read('--color-resize'),
     resizeHover: read('--color-resize-hover'),
+    fieldHighlight: read('--color-field-highlight'),
     overlap: read('--color-overlap'),
     scene: read('--color-scene'),
     grid: read('--color-scene-grid'),

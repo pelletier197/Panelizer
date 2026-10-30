@@ -30,8 +30,8 @@ const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(naviga
 export function formatKeys(keys: string, mac = IS_MAC): string {
   if (!mac) return keys
   return keys
-    .replace(/Ctrl\+/g, '⌘')
-    .replace(/Alt\+/g, '⌥')
-    .replace(/Shift\+/g, '⇧')
+    .replace(/Ctrl\+?/g, '⌘')
+    .replace(/Alt\+?/g, '⌥')
+    .replace(/Shift\+?/g, '⇧')
     .replace(/^Del$/, '⌫')
 }

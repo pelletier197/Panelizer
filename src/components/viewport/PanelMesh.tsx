@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { Mesh } from 'three'
 import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
@@ -9,6 +9,7 @@ import { SNAP_THRESHOLD_MM, snapGroupDelta, snapHintFromTarget } from '../../lib
 import { useDesignStore } from '../../store/designStore'
 import { ResizeHandles } from './ResizeHandles'
 import { palette } from './palette'
+import { roundedPanelGeometry } from './panelGeometry'
 import { useGesture, type GestureSpec } from './useGesture'
 
 type Vec3 = [number, number, number]
@@ -44,7 +45,9 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   // The last-selected panel carries the move gizmo for the whole group.
   const isPrimary = useDesignStore((s) => s.selectedIds[s.selectedIds.length - 1] === panel.id)
   // Caught by the box-select being dragged — a lighter version of the selected look.
-  const previewed = useDesignStore((s) => s.boxPreview.includes(panel.id))
+  // Also lit while its row is hovered in the parts list, to show which piece
+  // a row is.
+  const previewed = useDesignStore((s) => s.boxPreview.includes(panel.id) || s.hoverIds.includes(panel.id))
   // Shift means box-select; the gizmo stands aside so it can't grab the press.
   const boxKeyHeld = useDesignStore((s) => s.boxKeyHeld)
   const sceneSelect = useDesignStore((s) => s.sceneSelect)
@@ -70,6 +73,24 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   const axisRef = useRef<0 | 1 | 2 | null>(null)
 
   const size = toMetres(panelBoxSize(panel))
+
+  // Rounded corners need a real outline; square panels keep the plain box.
+  // Rebuilt only when the shape changes — not on every move, which only
+  // changes the position.
+  const { length, width, thickness, normal } = panel
+  const cornersKey = panel.corners?.join(',') ?? ''
+  const rounded = useMemo(
+    () =>
+      roundedPanelGeometry({
+        length,
+        width,
+        thickness,
+        normal,
+        corners: cornersKey ? (cornersKey.split(',').map(Number) as Panel['corners']) : undefined,
+      }),
+    [length, width, thickness, normal, cornersKey],
+  )
+  useEffect(() => () => rounded?.dispose(), [rounded])
   const position = toMetres(panel.position)
 
   const selectedNow = () => {
@@ -241,7 +262,7 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
               }
         }
       >
-        <boxGeometry args={size} />
+        {rounded ? <primitive object={rounded} attach="geometry" /> : <boxGeometry args={size} />}
         {/* A hidden panel is a faint light-grey ghost: a barely-there transparent
             fill so its shape still reads, but you can see straight through it.
             The `key` forces a fresh material when visibility flips — toggling

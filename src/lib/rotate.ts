@@ -2,6 +2,7 @@ import type { Axis, Panel } from '../types/panel'
 import { axisField, panelBoxSize } from './geometry'
 import { unionBounds } from './framing'
 import type { PanelPatch } from './resize'
+import { CORNER_SIGNS } from './rounding'
 
 type Vec3 = [number, number, number]
 type AxisIndex = 0 | 1 | 2
@@ -38,6 +39,35 @@ function turnPoint(p: Vec3, pivot: Vec3, about: AxisIndex, dir: 1 | -1): Vec3 {
   return out
 }
 
+/** The world axis (0 / 1 / 2) a face dimension runs along for a given normal. */
+const axisOf = (normal: Axis, field: 'length' | 'width'): AxisIndex =>
+  ([0, 1, 2] as AxisIndex[]).find((a) => axisField(normal, a) === field)!
+
+/**
+ * A panel's corner radii after a quarter turn, so each radius stays on the
+ * same physical corner. Each corner's direction from the centre is taken into
+ * world space, turned, and read back in the turned panel's face frame.
+ */
+function turnCorners(
+  panel: Panel,
+  newNormal: Axis,
+  about: AxisIndex,
+  dir: 1 | -1,
+): [number, number, number, number] {
+  const radii = panel.corners!
+  const turned: [number, number, number, number] = [0, 0, 0, 0]
+  CORNER_SIGNS.forEach(([su, sv], i) => {
+    const world: Vec3 = [0, 0, 0]
+    world[axisOf(panel.normal, 'length')] = su
+    world[axisOf(panel.normal, 'width')] = sv
+    const after = turnPoint(world, [0, 0, 0], about, dir)
+    const nu = Math.sign(after[axisOf(newNormal, 'length')])
+    const nv = Math.sign(after[axisOf(newNormal, 'width')])
+    turned[CORNER_SIGNS.findIndex(([u, v]) => u === nu && v === nv)] = radii[i]
+  })
+  return turned
+}
+
 /**
  * Turn panels a quarter turn about a world axis, as one rigid group pivoting on
  * the centre of their combined bounding box (a single panel turns in place).
@@ -69,6 +99,8 @@ export function rotatePanels(panels: Panel[], about: AxisIndex, dir: 1 | -1): Pa
       const field = axisField(normal, a)
       if (field !== 'thickness') patch[field] = turned[a]
     }
+
+    if (panel.corners) patch.corners = turnCorners(panel, normal, about, dir)
 
     if (panel.grain !== 'none') {
       const grainAxis = ([0, 1, 2] as AxisIndex[]).find((a) => axisField(panel.normal, a) === panel.grain)!

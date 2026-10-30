@@ -4,47 +4,65 @@
  * Design tokens for the app, exposed to Tailwind as utilities.
  *
  * `@theme` entries become utility classes: `--color-surface` gives you
- * `bg-surface`, `text-surface`, `border-surface`, and so on. The palette is the
- * dark, dense look a shop tool wants — a near-black canvas so the 3D viewport
- * and the cut diagrams carry the colour.
+ * `bg-surface`, `text-surface`, `border-surface`, and so on. The palette is a
+ * soft charcoal rather than near-black: dark enough that the 3D viewport and
+ * the cut diagrams carry the colour, light enough to be easy on the eyes over
+ * a long session.
+ *
+ * Measured, not eyeballed (WCAG contrast ratios):
+ * - every text colour reads at 4.5:1 or better on bg, surface and surface-2;
+ * - main text is held near 12:1 rather than the 16:1 of white on black, which
+ *   glares on a dark screen;
+ * - each surface steps ~1.2:1 above the one below, so layers don't blend.
  */
 @theme {
   /* Surfaces climb toward the viewer: the app canvas is darkest, chrome sits
      above it, and controls sit above that. Cooler and slightly deeper than a
      flat grey so the plywood tones in the 3D view read warm against it. */
-  --color-bg: #0e1014;
-  --color-surface: #171a20;
-  --color-surface-2: #1f232b;
-  --color-surface-3: #2a2f39;
-  --color-edge: #262b34;
-  --color-edge-strong: #3a4150;
+  --color-bg: #1a1d22;
+  --color-surface: #262a31;
+  --color-surface-2: #31363f;
+  --color-surface-3: #3d434e;
+  --color-edge: #3b414c;
+  --color-edge-strong: #525a68;
 
-  --color-ink: #eceef2;
-  --color-ink-dim: #8b93a1;
-  --color-ink-faint: #5f6672;
+  --color-ink: #e4e7ec;
+  --color-ink-dim: #b4bbc6;
+  --color-ink-faint: #9aa1ad;
 
-  --color-accent: #4c86ff;
-  --color-accent-hover: #679bff;
-  --color-danger: #e2604a;
+  /* The accent is two tokens because one blue can't do both jobs: as a fill it
+     has to stay dark enough for white labels on it (3.6:1 here), as text it
+     has to be light enough to read on these surfaces (`accent-ink`, 4.6:1+). */
+  --color-accent: #4a82f7;
+  --color-accent-hover: #6295fa;
+  --color-accent-ink: #6b9dff;
+  --color-danger: #f07a64;
 
   /* Snap-guide + overlay hues, shared with the 3D viewport so the readout and
      the guides agree. */
-  --color-snap-butt: #4c86ff;
+  --color-snap-butt: #4a82f7;
   --color-snap-middle: #ffb02e;
   --color-resize: #ff8a2a;
   --color-resize-hover: #ffab5e;
   --color-overlap: #1fd1c4;
+  /* The edges a size field changes, lit while the field is hovered / focused:
+     a bright yellow nothing else in the scene uses (not the plywood, the
+     lavender selection tint, or the blue outlines). */
+  --color-field-highlight: #ffd60a;
 
   /* 3D viewport. three.js materials take colour strings, not classes, so these
      are read back out of the stylesheet by `viewport/palette.ts` rather than
      re-declared in TypeScript — the viewport used to keep its own copies and
      drifted the moment the accent changed. */
-  --color-scene: #0e1014;
-  --color-scene-grid: #2a2f39;
-  --color-scene-grid-major: #3f4653;
+  /* The canvas sits a step *above* the chrome — a lit stage for the model —
+     with grid lines strong enough to judge position by (minor 1.5:1, major
+     2.3:1 against the canvas). Plywood still reads at 6:1 on it. */
+  --color-scene: #30353d;
+  --color-scene-grid: #4a505b;
+  --color-scene-grid-major: #67707e;
   --color-panel-edge: #5a4a32;
   --color-ghost: #c9ced7;
-  --color-ghost-edge: #6a7180;
+  --color-ghost-edge: #a3abb8; /* 5.3:1 on the canvas: a hidden panel stays findable */
   --color-corner: #9fb4d8;
 
   --radius-DEFAULT: 6px;
@@ -148,6 +166,9 @@
     fill-opacity: 1 !important;
     stroke: #000 !important;
     stroke-width: 1 !important;
+  }
+  [data-sheet-cut-outline] {
+    stroke: #666 !important;
   }
 
   /* Chips lose their dark pill; swatches become an outline. */

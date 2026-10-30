@@ -1,4 +1,5 @@
 import type { Placement, SheetLayout } from '../../../lib/nesting'
+import { roundedRectPath, type CornerRadii } from '../../../lib/rounding'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { planPlacements, type PlacementPlan } from './sheetPlan'
 import { cx } from '../../ui/cx'
@@ -10,6 +11,8 @@ interface PartBox {
   w: number
   h: number
 }
+
+const SQUARE: CornerRadii = [0, 0, 0, 0]
 
 /**
  * One sheet drawn to scale, with its parts, kerf gaps, and margin border.
@@ -75,11 +78,8 @@ export function SheetSvg({
                 hideTip()
               }}
             >
-              <rect
-                x={box.x}
-                y={box.y}
-                width={box.w}
-                height={box.h}
+              <path
+                d={roundedRectPath(box.x, box.y, box.w, box.h, (p.corners ?? SQUARE).map((r) => r * scale) as CornerRadii)}
                 fill={color}
                 data-sheet-part
                 className={cx(
@@ -89,6 +89,18 @@ export function SheetSvg({
                     : 'stroke-black/55 [fill-opacity:0.85] [stroke-width:1]',
                 )}
               />
+              {/* A rounded part is packed — and first cut on the saw — as its
+                  full rectangle; dot that outline around the curved shape. */}
+              {p.corners && (
+                <rect
+                  x={box.x}
+                  y={box.y}
+                  width={box.w}
+                  height={box.h}
+                  data-sheet-cut-outline
+                  className="pointer-events-none fill-none stroke-ink-dim [stroke-dasharray:3_2] [stroke-width:1]"
+                />
+              )}
               {printing ? (
                 <PrintLabel placement={p} box={box} plan={plan[i]} />
               ) : (
@@ -101,7 +113,7 @@ export function SheetSvg({
 
       <figcaption className="mt-1 text-xs text-ink-dim">
         Sheet {sheet.index} · {label(sheet.length)} × {label(sheet.width)}
-        <span className="ml-2 rounded-full border border-accent/45 bg-accent/20 px-1.5 py-px text-[9px] whitespace-nowrap text-accent">
+        <span className="ml-2 rounded-full border border-accent/45 bg-accent/20 px-1.5 py-px text-[9px] whitespace-nowrap text-accent-ink">
           ↔ grain
         </span>
       </figcaption>

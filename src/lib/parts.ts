@@ -2,6 +2,7 @@ import type { Panel } from '../types/panel'
 import type { Material } from './materials'
 import { findMaterial } from './materials'
 import { formatMeasurement, roundToUnitGrid, UNIT_SUFFIX, type Unit } from './units'
+import { cornerKey, cornerRadii, type CornerRadii } from './rounding'
 
 /** One line of the parts list: a group of identical parts and how many are needed. */
 export interface PartRow {
@@ -14,6 +15,9 @@ export interface PartRow {
   parts: string[]
   /** Ids of the panels in this group, so a row can select them in the scene. */
   ids: string[]
+  /** Corner radii (mm) when the part is rounded, in the row's frame (length
+   *  first). Absent for square-cornered parts. */
+  corners?: CornerRadii
 }
 
 /** Group panels that share the same size and material into countable rows.
@@ -21,7 +25,11 @@ export interface PartRow {
  *  400x600 panel are recognised as the same part. Sizes are compared at the
  *  document's display resolution (snapped to the unit grid): if two parts *read*
  *  as the same 13 1/2", they group — no sub-fraction mismatch keeps look-alike
- *  parts apart. The row reports those grid-snapped sizes. */
+ *  parts apart. The row reports those grid-snapped sizes.
+ *
+ *  Rounded corners are part of a part's identity, compared the way a board can
+ *  be handled: turned end for end or flipped over, it's the same part (see
+ *  `cornerKey`). */
 export function buildParts(panels: Panel[], materials: Material[], unit: Unit, precision: number): PartRow[] {
   const rows = new Map<string, PartRow>()
   const grid = (mm: number) => roundToUnitGrid(mm, unit, precision)
@@ -30,7 +38,12 @@ export function buildParts(panels: Panel[], materials: Material[], unit: Unit, p
     const [length, width] = [grid(panel.length), grid(panel.width)].sort((a, b) => b - a)
     const thickness = grid(panel.thickness)
     const material = findMaterial(materials, panel.materialId)
-    const key = `${length}x${width}x${thickness}@${material.id}`
+    // Radii in the row's frame: if the width became the length, the face is
+    // transposed, which swaps corners 1 and 3.
+    const [r0, r1, r2, r3] = cornerRadii(panel).map(grid)
+    const radii: CornerRadii = panel.width > panel.length ? [r0, r3, r2, r1] : [r0, r1, r2, r3]
+    const rounded = radii.some((r) => r > 0)
+    const key = `${length}x${width}x${thickness}@${material.id}#${cornerKey(radii, length === width)}`
 
     const row = rows.get(key)
     if (row) {
@@ -47,6 +60,7 @@ export function buildParts(panels: Panel[], materials: Material[], unit: Unit, p
         quantity: 1,
         parts: [panel.name],
         ids: [panel.id],
+        ...(rounded && { corners: radii }),
       })
     }
   }
@@ -62,15 +76,17 @@ export function partNames(names: string[]): string {
   return [...new Set(names)].join(', ')
 }
 
-/** Render the parts list as CSV text (dimensions in `unit`), ready to paste
- *  into a spreadsheet. Inch fractions are quoted so the "/" survives the CSV. */
 /** One CSV text field: always quoted, with embedded quotes doubled (RFC 4180),
  *  so commas, quotes and inch fractions in names survive. */
 const csvText = (value: string): string => `"${value.replace(/"/g, '""')}"`
 
+/** Render the parts list as CSV text (dimensions in `unit`), ready to paste
+ *  into a spreadsheet. Inch fractions are quoted so the "/" survives the CSV.
+ *  Corner radii go last, in corner order (see `lib/rounding`), blank for a
+ *  square-cornered part. */
 export function partsToCsv(rows: PartRow[], unit: Unit): string {
   const u = UNIT_SUFFIX[unit]
-  const header = ['Qty', 'Part', `Length (${u})`, `Width (${u})`, `Thickness (${u})`, 'Material']
+  const header = ['Qty', 'Part', `Length (${u})`, `Width (${u})`, `Thickness (${u})`, 'Material', `Corner radii (${u})`]
   const lines = rows.map((r) =>
     [
       r.quantity,
@@ -79,6 +95,7 @@ export function partsToCsv(rows: PartRow[], unit: Unit): string {
       csvText(formatMeasurement(r.width, unit)),
       csvText(formatMeasurement(r.thickness, unit)),
       csvText(r.material),
+      csvText(r.corners ? r.corners.map((c) => formatMeasurement(c, unit)).join(' / ') : ''),
     ].join(','),
   )
   return [header.join(','), ...lines].join('\n')

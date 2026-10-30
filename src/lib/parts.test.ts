@@ -117,7 +117,7 @@ describe('partsToCsv', () => {
   it('emits a unit-aware header', () => {
     const rows = buildParts([panel()], MATERIALS, 'mm', 16)
     const csv = partsToCsv(rows, 'mm')
-    expect(csv.split('\n')[0]).toBe('Qty,Part,Length (mm),Width (mm),Thickness (mm),Material')
+    expect(csv.split('\n')[0]).toBe('Qty,Part,Length (mm),Width (mm),Thickness (mm),Material,Corner radii (mm)')
   })
 
   it('emits the imperial header when the document is in inches', () => {
@@ -129,7 +129,7 @@ describe('partsToCsv', () => {
     const rows = buildParts([panel(), panel()], MATERIALS, 'mm', 16)
     const lines = partsToCsv(rows, 'mm').split('\n')
     expect(lines).toHaveLength(2)
-    expect(lines[1]).toBe('2,"Part","600","400","18","Plywood"')
+    expect(lines[1]).toBe('2,"Part","600","400","18","Plywood",""')
   })
 
   it('quotes inch fractions so the slash survives the CSV', () => {
@@ -152,6 +152,44 @@ describe('partsToCsv', () => {
     const odd: Material = { id: 'odd', name: 'Ply, 3/4"', color: '#fff' }
     const rows = buildParts([panel({ materialId: 'odd' })], [odd], 'mm', 16)
     const line = partsToCsv(rows, 'mm').split('\n')[1]
-    expect(line.endsWith(',"Ply, 3/4"""')).toBe(true)
+    expect(line.endsWith(',"Ply, 3/4""",""')).toBe(true)
+  })
+})
+
+describe('buildParts — rounded corners', () => {
+  it('keeps a rounded part apart from the same size with square corners', () => {
+    const rows = buildParts([panel(), panel({ corners: [20, 0, 0, 0] })], MATERIALS, 'mm', 16)
+    expect(rows).toHaveLength(2)
+    expect(rows.find((r) => r.corners)?.corners).toEqual([20, 0, 0, 0])
+  })
+
+  it('groups mirror images and end-for-end turns as one part', () => {
+    const rows = buildParts(
+      [panel({ corners: [20, 20, 0, 0] }), panel({ corners: [0, 0, 20, 20] })],
+      MATERIALS,
+      'mm',
+      16,
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].quantity).toBe(2)
+  })
+
+  it('groups a part drawn width-first with its length-first twin', () => {
+    // 400 x 600 with corner 1 rounded is 600 x 400 with corner 3 rounded.
+    const rows = buildParts(
+      [
+        panel({ length: 600, width: 400, corners: [0, 0, 0, 20] }),
+        panel({ length: 400, width: 600, corners: [0, 20, 0, 0] }),
+      ],
+      MATERIALS,
+      'mm',
+      16,
+    )
+    expect(rows).toHaveLength(1)
+  })
+
+  it('writes the radii into the CSV in the row unit', () => {
+    const rows = buildParts([panel({ corners: [20, 0, 10, 0] })], MATERIALS, 'mm', 16)
+    expect(partsToCsv(rows, 'mm').split('\n')[1].endsWith(',"20 / 0 / 10 / 0"')).toBe(true)
   })
 })
