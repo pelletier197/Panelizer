@@ -15,11 +15,6 @@
 
   ![Demo](public/demo.gif)
 
-<div>
-  See the full video
-  <a href="https://github.com/pelletier197/Panelizer/blob/main/public/demo.webm" target="_blank">here</a>.
-  </div>
-
 </div>
 
 ---
