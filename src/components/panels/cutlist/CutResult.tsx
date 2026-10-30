@@ -1,4 +1,6 @@
+import { sheetDxf, sheetDxfFilename } from '../../../lib/dxf'
 import type { CutlistResult } from '../../../lib/nesting'
+import { downloadText } from '../../../lib/persistence'
 import { partNames, type PartRow } from '../../../lib/parts'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { useDesignStore } from '../../../store/designStore'
@@ -43,6 +45,7 @@ export function CutResult({
   printing: boolean
 }) {
   const updatePanels = useDesignStore((s) => s.updatePanels)
+  const projectName = useDesignStore((s) => s.name)
   const fmt = (mm: number) => formatMeasurement(mm, unit)
 
   const tooBig = result.unplaced.filter((u) => u.reason === 'too-big')
@@ -96,6 +99,9 @@ export function CutResult({
                   showTip={showTip}
                   hideTip={hideTip}
                   printing={printing}
+                  onExportDxf={() =>
+                    downloadText(sheetDxf(sheet), sheetDxfFilename(projectName, group, sheet), 'application/dxf')
+                  }
                 />
               ))}
             </div>

@@ -52,8 +52,9 @@ Every panel becomes a manufacturing part automatically. Get a clean, real-time l
 - 🌲 **Respects grain direction** for visible panels.
 - 🪚 **Accounts for kerf** and edge margins.
 - 🚨 **Flags missing stock** or insufficient sheets.
+- 🤖 **Exports each sheet as a DXF** for your CNC's CAM software, rounded corners as true arcs.
 
-*The result? A visual cut diagram that's actually useful at the saw.*
+*The result? A visual cut diagram that's actually useful at the saw — or the router.*
 
 ### 🔒 100% Local & Private
 Everything runs locally in your browser. **No accounts, no cloud, no server, no uploads, no limit.** Projects save directly to your machine as a simple JSON file you can reopen anytime, anywhere.
