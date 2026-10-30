@@ -130,3 +130,19 @@ export function cornerKey(radii: CornerRadii, square: boolean): string {
     .map((order) => order.map((i) => radii[i]).join('/'))
     .sort()[0]
 }
+
+/**
+ * An SVG path marking the square corners a rounding removes: at each rounded
+ * corner, two legs along the edges, each as long as its radius, meeting where
+ * the square corner was. Square corners and straight edges add nothing.
+ * Radii in screen order [top-left, top-right, bottom-right, bottom-left].
+ * Empty when nothing is rounded.
+ */
+export function squaredCornersPath(x: number, y: number, w: number, h: number, [tl, tr, br, bl]: CornerRadii): string {
+  const legs: string[] = []
+  if (tl) legs.push(`M${x},${y + tl} V${y} H${x + tl}`)
+  if (tr) legs.push(`M${x + w - tr},${y} H${x + w} V${y + tr}`)
+  if (br) legs.push(`M${x + w},${y + h - br} V${y + h} H${x + w - br}`)
+  if (bl) legs.push(`M${x + bl},${y + h} H${x} V${y + h - bl}`)
+  return legs.join(' ')
+}
