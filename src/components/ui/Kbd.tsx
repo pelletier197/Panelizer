@@ -11,6 +11,8 @@ export function Kbd({ keys, className, inline = false }: { keys: string; classNa
     <kbd
       className={cx(
         'inline-block rounded-xs border border-current/25 px-1 font-mono text-[10px] leading-[14px] font-normal opacity-70',
+        // No keyboard to press them with on a touch screen.
+        'pointer-coarse:hidden',
         // After a button's label it needs a gap; inside running text it doesn't.
         !inline && 'ml-1.5',
         className,

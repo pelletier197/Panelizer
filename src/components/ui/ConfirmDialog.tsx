@@ -31,7 +31,7 @@ export function ConfirmHost() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-6"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 md:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={request.title}

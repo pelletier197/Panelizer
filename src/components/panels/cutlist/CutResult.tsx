@@ -2,6 +2,7 @@ import type { CutlistResult } from '../../../lib/nesting'
 import { partNames, type PartRow } from '../../../lib/parts'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { useDesignStore } from '../../../store/designStore'
+import { useCompact } from '../../../hooks/useMedia'
 import { SheetSvg } from './SheetSvg'
 import { sheetKey, type MissingStock } from './useCutlistModel'
 import { Button } from '../../ui/Button'
@@ -11,6 +12,8 @@ import { cx } from '../../ui/cx'
 /** Longest sheet drawn this wide (px); everything else scales to match. On
  *  paper the sheets go wider so every part's label + size stays legible. */
 const SHEET_MAX_PX = 360
+/** On a phone: the width of the narrowest common one, less the padding. */
+const COMPACT_SHEET_MAX_PX = 320
 const PRINT_SHEET_MAX_PX = 680
 
 /** The cut diagrams, the notices for anything that didn't nest, and the
@@ -47,6 +50,7 @@ export function CutResult({
   previewSheets: string[] | null
 }) {
   const updatePanels = useDesignStore((s) => s.updatePanels)
+  const compact = useCompact()
   const fmt = (mm: number) => formatMeasurement(mm, unit)
 
   const tooBig = result.unplaced.filter((u) => u.reason === 'too-big')
@@ -76,7 +80,7 @@ export function CutResult({
         const used = group.sheets.reduce((sum, s) => sum + s.usedArea, 0)
         const waste = sheetArea ? Math.round((1 - used / sheetArea) * 100) : 0
         const maxLength = Math.max(...group.sheets.map((s) => s.length))
-        const scale = (printing ? PRINT_SHEET_MAX_PX : SHEET_MAX_PX) / maxLength
+        const scale = (printing ? PRINT_SHEET_MAX_PX : compact ? COMPACT_SHEET_MAX_PX : SHEET_MAX_PX) / maxLength
 
         return (
           <section data-cut-group className="mb-6" key={group.key}>

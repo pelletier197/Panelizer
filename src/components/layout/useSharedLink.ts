@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { clearSharedToken, linkToDesign, sharedToken } from '../../lib/share'
 import { useConfirm } from '../ui/useConfirm'
 import { useDesignStore } from '../../store/designStore'
+import { frameView } from '../viewport/frameView'
 
 /**
  * Opens a design that arrived in the URL, as a new project of its own — so it
@@ -38,7 +39,12 @@ export function useSharedLink() {
           confirmLabel: 'Open',
         })
 
-        if (ok) newProject(design)
+        if (ok) {
+          newProject(design)
+          // Whatever angle the last project was left at, start looking at
+          // this one — once it has rendered.
+          requestAnimationFrame(() => frameView(design.panels))
+        }
       } catch {
         clearSharedToken()
         await confirm({

@@ -116,30 +116,43 @@ export function Toolbar() {
       {/* Spacing is per-cluster, not one uniform gap: separate clusters need
           room between them, but the members of a cluster belong together and
           look adrift if given the same. */}
-      <header className="flex h-13 shrink-0 items-center border-b border-edge bg-surface px-4 print:hidden">
+      <header className="flex h-13 shrink-0 items-center border-b border-edge bg-surface px-3 md:px-4 print:hidden">
         <img src="/Panelizer/logo.png" alt="Panelizer" className="mr-2 h-5 w-auto opacity-90" />
         <ProjectSwitcher />
 
-        <Menu label="+ Add">
-          {(close) => (
-            <MenuList>
-              {ADD_PRESETS.map(({ label, preset, thin }) => (
-                <MenuItem
-                  key={label}
-                  onClick={() => {
-                    addPanel(thin ? { ...preset, thickness: defaultThinThickness(unit) } : preset)
-                    close()
-                  }}
-                >
-                  {label}
-                </MenuItem>
-              ))}
-            </MenuList>
-          )}
-        </Menu>
+        {/* Building is for the desktop; on a phone the toolbar keeps what a
+            viewer needs: measuring, the cutlist and the document menu. */}
+        <div className="hidden md:block">
+          <Menu label="+ Add">
+            {(close) => (
+              <MenuList>
+                {ADD_PRESETS.map(({ label, preset, thin }) => (
+                  <MenuItem
+                    key={label}
+                    onClick={() => {
+                      addPanel(thin ? { ...preset, thickness: defaultThinThickness(unit) } : preset)
+                      close()
+                    }}
+                  >
+                    {label}
+                  </MenuItem>
+                ))}
+              </MenuList>
+            )}
+          </Menu>
+        </div>
+
+        <Button
+          className="md:hidden"
+          variant={tool === 'measure' ? 'primary' : 'ghost'}
+          aria-pressed={tool === 'measure'}
+          onClick={() => setTool(tool === 'measure' ? 'move' : 'measure')}
+        >
+          Measure
+        </Button>
 
         <div
-          className="ml-6 flex items-center gap-2 rounded-md border border-edge bg-bg/60 p-1.5"
+          className="ml-6 hidden items-center gap-2 rounded-md border border-edge bg-bg/60 p-1.5 md:flex"
           role="group"
           aria-label="Tools"
         >
