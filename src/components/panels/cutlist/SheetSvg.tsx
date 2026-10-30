@@ -1,5 +1,5 @@
 import type { Placement, SheetLayout } from '../../../lib/nesting'
-import { roundedRectPath, type CornerRadii } from '../../../lib/rounding'
+import { roundedRectPath, squaredCornersPath, type CornerRadii } from '../../../lib/rounding'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { planPlacements, type PlacementPlan } from './sheetPlan'
 import { cx } from '../../ui/cx'
@@ -90,13 +90,11 @@ export function SheetSvg({
                 )}
               />
               {/* A rounded part is packed — and first cut on the saw — as its
-                  full rectangle; dot that outline around the curved shape. */}
+                  full rectangle; dot in the square corners the rounding then
+                  takes off, so the curve shows against what was cut. */}
               {p.corners && (
-                <rect
-                  x={box.x}
-                  y={box.y}
-                  width={box.w}
-                  height={box.h}
+                <path
+                  d={squaredCornersPath(box.x, box.y, box.w, box.h, p.corners.map((r) => r * scale) as CornerRadii)}
                   data-sheet-cut-outline
                   className="pointer-events-none fill-none stroke-ink-dim [stroke-dasharray:3_2] [stroke-width:1]"
                 />

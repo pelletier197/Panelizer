@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { cornerKey, cornerRadii, hasRounding, roundedOutline, roundedRectPath, sheetCornerRadii } from './rounding'
+import {
+  cornerKey,
+  cornerRadii,
+  hasRounding,
+  roundedOutline,
+  roundedRectPath,
+  sheetCornerRadii,
+  squaredCornersPath,
+} from './rounding'
 
 describe('cornerRadii', () => {
   it('treats a panel without corners as square', () => {
@@ -83,5 +91,15 @@ describe('cornerKey', () => {
 
   it('treats those as the same on a square part, which can turn a quarter', () => {
     expect(cornerKey([10, 10, 0, 0], true)).toBe(cornerKey([0, 10, 10, 0], true))
+  })
+})
+
+describe('squaredCornersPath', () => {
+  it('is empty when nothing is rounded', () => {
+    expect(squaredCornersPath(0, 0, 100, 50, [0, 0, 0, 0])).toBe('')
+  })
+
+  it('marks only the rounded corners, each leg as long as the radius', () => {
+    expect(squaredCornersPath(0, 0, 100, 50, [10, 0, 5, 0])).toBe('M0,10 V0 H10 M100,45 V50 H95')
   })
 })
