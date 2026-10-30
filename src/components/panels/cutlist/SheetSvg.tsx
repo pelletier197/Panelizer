@@ -2,7 +2,6 @@ import type { Placement, SheetLayout } from '../../../lib/nesting'
 import { roundedRectPath, squaredCornersPath, type CornerRadii } from '../../../lib/rounding'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { planPlacements, type PlacementPlan } from './sheetPlan'
-import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 
 /** Geometry of one placed part in screen px, shared by both label renderers. */
@@ -31,7 +30,6 @@ export function SheetSvg({
   showTip,
   hideTip,
   printing,
-  onExportDxf,
 }: {
   sheet: SheetLayout
   scale: number
@@ -43,8 +41,6 @@ export function SheetSvg({
   showTip: (e: { clientX: number; clientY: number }, text: string) => void
   hideTip: () => void
   printing: boolean
-  /** Download this sheet as a DXF, for CNC software. */
-  onExportDxf: () => void
 }) {
   const W = sheet.length * scale
   const H = sheet.width * scale
@@ -113,22 +109,11 @@ export function SheetSvg({
         })}
       </svg>
 
-      <figcaption className="mt-1 flex items-center text-xs text-ink-dim">
+      <figcaption className="mt-1 text-xs text-ink-dim">
         Sheet {sheet.index} · {label(sheet.length)} × {label(sheet.width)}
         <span className="ml-2 rounded-full border border-accent/45 bg-accent/20 px-1.5 py-px text-[9px] whitespace-nowrap text-accent-ink">
           ↔ grain
         </span>
-        {!printing && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto print:hidden"
-            title="Download this sheet as a DXF drawing (mm) for CNC software"
-            onClick={onExportDxf}
-          >
-            ↓ DXF
-          </Button>
-        )}
       </figcaption>
 
       {printing && legend.length > 0 && (

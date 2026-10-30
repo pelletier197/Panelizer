@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react'
 import { useDesignStore } from '../../store/designStore'
+import { sheetDxf, sheetDxfFilename } from '../../lib/dxf'
+import type { CutlistResult } from '../../lib/nesting'
+import { downloadText } from '../../lib/persistence'
+import { formatMeasurement } from '../../lib/units'
 import { Button } from '../ui/Button'
 import { Kbd } from '../ui/Kbd'
+import { Menu, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
+import { Swatch } from '../ui/Panel'
 import { formatKeys, KEYS } from '../ui/keys'
 import { useDragResize } from '../../hooks/useDragResize'
 import { usePersistentState } from '../../hooks/usePersistentState'
@@ -72,12 +78,9 @@ export function CutlistModal() {
       >
         <header className="flex h-13 shrink-0 items-center gap-4 border-b border-edge bg-surface px-4 print:hidden">
           <h2 className="m-0 flex-1 text-base font-semibold">Cutlist</h2>
-          <Button onClick={() => window.print()}>
-            Print
-            <Kbd keys={KEYS.print} />
-          </Button>
+          <ExportMenu result={model.result} pending={model.pending} />
           {/* Close is fenced off behind a divider so it can't be fat-fingered
-              while reaching for Print. */}
+              while reaching for Export. */}
           <span className="h-6 w-px bg-edge" />
           <Button variant="ghost" icon aria-label="Close" title={`Close (${formatKeys(KEYS.cancel)})`} onClick={() => setOpen(false)}>
             ✕
@@ -126,5 +129,56 @@ export function CutlistModal() {
         {tooltip.node}
       </div>
     </div>
+  )
+}
+
+/**
+ * Ways out of the app for the layout: printing (or saving as PDF from the print
+ * dialog), and a DXF per sheet for CNC software — one file per sheet, as a CNC
+ * cuts one sheet per job.
+ */
+function ExportMenu({ result, pending }: { result: CutlistResult; pending: boolean }) {
+  const projectName = useDesignStore((s) => s.name)
+  const unit = useDesignStore((s) => s.unit)
+  const sheets = result.groups.flatMap((group) => group.sheets.map((sheet) => ({ group, sheet })))
+
+  return (
+    <Menu label="Export" align="right">
+      {(close) => (
+        <MenuList>
+          <MenuItem
+            onClick={() => {
+              close()
+              // After the menu has closed, so the dialog opens on a clean page.
+              setTimeout(() => window.print())
+            }}
+          >
+            <span className="flex items-center justify-between gap-4">
+              Print / PDF
+              <Kbd keys={KEYS.print} />
+            </span>
+          </MenuItem>
+          <MenuLabel>DXF for CNC · mm</MenuLabel>
+          {sheets.length === 0 && <MenuItem disabled onClick={() => {}}>No sheets laid out yet</MenuItem>}
+          {sheets.map(({ group, sheet }) => (
+            <MenuItem
+              key={`${group.key}-${sheet.index}`}
+              // A layout still being worked out would export the previous one.
+              disabled={pending}
+              onClick={() => {
+                close()
+                downloadText(sheetDxf(sheet), sheetDxfFilename(projectName, group, sheet), 'application/dxf')
+              }}
+            >
+              <span className="flex items-center gap-1.5">
+                <Swatch color={group.color} />
+                {group.materialName} · {formatMeasurement(group.thickness, unit)}
+                <span className="text-ink-dim">— sheet {sheet.index}</span>
+              </span>
+            </MenuItem>
+          ))}
+        </MenuList>
+      )}
+    </Menu>
   )
 }

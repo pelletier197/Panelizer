@@ -26,7 +26,10 @@ export function Menu({ label, align = 'left', ariaLabel, variant = 'default', ch
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      // Handled: a dialog the menu sits in shouldn't close on the same press.
+      e.preventDefault()
+      setOpen(false)
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
