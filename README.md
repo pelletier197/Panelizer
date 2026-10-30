@@ -74,6 +74,12 @@ Issues and pull requests are always welcome! Whether you found a bug or have a b
 
 ---
 
+## ☕ Support
+
+Panelizer is free and always will be. If it saved you a sheet of plywood (or an afternoon), you can [buy me a coffee](https://buymeacoffee.com/pelletier197).
+
+---
+
 ## 📄 License
 
 Panelizer is open-source software released under the [MIT License](LICENSE).

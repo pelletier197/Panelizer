@@ -13,7 +13,6 @@ import { Kbd } from '../ui/Kbd'
 import { KEYS } from '../ui/keys'
 import { useConfirm } from '../ui/useConfirm'
 import { CopyField } from '../ui/CopyField'
-import { ToolHint } from '../layout/ToolHint'
 import { ProjectSwitcher } from '../layout/ProjectSwitcher'
 import { useImportFiles } from '../layout/useImportFiles'
 
@@ -41,6 +40,9 @@ const TOOL_SECTIONS: { label: string; tools: { tool: Tool; label: string }[] }[]
   { label: 'Resize', tools: [{ tool: 'resize', label: 'Resize' }] },
   { label: 'Measure', tools: [{ tool: 'measure', label: 'Measure' }] },
 ]
+
+/** Where the "Buy me a coffee" menu entry leads. */
+const SUPPORT_URL = 'https://buymeacoffee.com/pelletier197'
 
 const DIVIDER = <div className="my-1 border-t border-edge" />
 
@@ -189,7 +191,7 @@ export function Toolbar() {
                         }}
                       >
                         <span className="flex items-center gap-4">
-                          <span className={cx('flex-1', tool === t && 'text-accent')}>{label}</span>
+                          <span className={cx('flex-1', tool === t && 'text-accent-ink')}>{label}</span>
                           <Kbd keys={TOOL_SHORTCUTS[t]} className="text-ink-faint" />
                         </span>
                       </MenuItem>
@@ -275,6 +277,17 @@ export function Toolbar() {
                 Shortcuts &amp; mouse controls
                 <Kbd keys={KEYS.help} />
               </MenuItem>
+
+              {DIVIDER}
+
+              <MenuItem
+                onClick={() => {
+                  close()
+                  window.open(SUPPORT_URL, '_blank', 'noopener,noreferrer')
+                }}
+              >
+                ☕ Buy me a coffee
+              </MenuItem>
             </MenuList>
           )}
           </Menu>
@@ -292,7 +305,6 @@ export function Toolbar() {
           }}
         />
       </header>
-      <ToolHint />
     </>
   )
 }

@@ -34,10 +34,16 @@ export function Viewport() {
         args={[10, 10]}
         cellSize={0.1}
         cellColor={paint.grid}
+        // drei's defaults (0.5 / 1 px) draw hairlines that vanish at a glance;
+        // these stay thin but readable.
+        cellThickness={0.8}
         sectionSize={1}
         sectionColor={paint.gridMajor}
-        fadeDistance={18}
-        fadeStrength={1.5}
+        sectionThickness={1.3}
+        // Fade later and more gently, so the grid doesn't dissolve a few metres
+        // behind the model.
+        fadeDistance={25}
+        fadeStrength={1}
         infiniteGrid
       />
 

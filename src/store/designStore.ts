@@ -22,6 +22,13 @@ export type Tool = 'move' | 'move-snap' | 'resize' | 'measure'
 
 type Point = [number, number, number]
 
+/** A panel-editor field the viewport should point at: a size field (the edge
+ *  it changes) or a position field (the axis it moves along). */
+export type FieldHighlight =
+  | { kind: 'size'; field: 'length' | 'width' | 'thickness' }
+  | { kind: 'position'; axis: 0 | 1 | 2 }
+  | { kind: 'corner'; index: 0 | 1 | 2 | 3 }
+
 /** How a box-select combines with the existing selection. */
 export type BoxSelectOp = 'add' | 'remove' | 'replace'
 
@@ -94,6 +101,10 @@ interface DesignState extends Design {
    *  Transient UI state. */
   boxPreview: string[]
   setBoxPreview: (ids: string[]) => void
+  /** Panels whose row is under the pointer in the parts list, lit in the
+   *  viewport the same way as a box-select preview. Transient UI state. */
+  hoverIds: string[]
+  setHoverIds: (ids: string[]) => void
   /** Whether Shift (the box-select key) is down. While it is, the move gizmo
    *  stands aside so a Shift+drag always draws a box. Transient UI state. */
   boxKeyHeld: boolean
@@ -101,6 +112,13 @@ interface DesignState extends Design {
    *  pressed, drawn as ghosts in the viewport. Empty when nothing is hovered.
    *  Transient UI state — never part of the design. */
   rotatePreview: Panel[]
+  /** The panel-editor field under the pointer, and the one in focus, so the
+   *  viewport can light up what it changes: a size field's edge, or a position
+   *  field's axis. The hovered one wins, so pointing at a field while typing in
+   *  another shows the one pointed at, then falls back. Transient UI state. */
+  fieldHover: FieldHighlight | null
+  fieldFocus: FieldHighlight | null
+  setFieldHighlight: (source: 'hover' | 'focus', highlight: FieldHighlight | null) => void
   setRotatePreview: (panels: Panel[]) => void
   setBoxKeyHeld: (held: boolean) => void
   /** Apply a box-select: `add` the caught panels to the selection, `remove`
@@ -335,8 +353,11 @@ const createDesignStore = () => create<DesignState>((set, get) => {
     projectId: initial.id,
     selectedIds: [],
     boxPreview: [],
+    hoverIds: [],
     boxKeyHeld: false,
     rotatePreview: [],
+    fieldHover: null,
+    fieldFocus: null,
     snapHints: [],
     gesture: null,
     tool: 'move',
@@ -461,12 +482,25 @@ const createDesignStore = () => create<DesignState>((set, get) => {
       set({ pasteCount: pasteCount + 1 })
     },
 
+    setFieldHighlight: (source, highlight) => {
+      const key = source === 'hover' ? 'fieldHover' : 'fieldFocus'
+      // Small plain objects: comparing them serialised is enough to skip a
+      // re-render when nothing changed.
+      if (JSON.stringify(get()[key]) !== JSON.stringify(highlight)) set({ [key]: highlight })
+    },
+
     setRotatePreview: (rotatePreview) => {
       if (rotatePreview.length > 0 || get().rotatePreview.length > 0) set({ rotatePreview })
     },
 
     setBoxKeyHeld: (boxKeyHeld) => {
       if (get().boxKeyHeld !== boxKeyHeld) set({ boxKeyHeld })
+    },
+
+    setHoverIds: (hoverIds) => {
+      const current = get().hoverIds
+      if (current.length === hoverIds.length && current.every((id, i) => id === hoverIds[i])) return
+      set({ hoverIds })
     },
 
     setBoxPreview: (boxPreview) => {

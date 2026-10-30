@@ -4,6 +4,7 @@ import { OverlapHighlights } from './OverlapHighlights'
 import { SnapHints } from './SnapHints'
 import { ToolOverlay } from './ToolOverlay'
 import { RotatePreview } from './RotatePreview'
+import { FieldHighlight } from './FieldHighlight'
 
 /** The cabinet itself: one mesh per panel, plus overlap markers at joints.
  *  Purely a projection of the store — holds no state of its own. */
@@ -18,6 +19,7 @@ export function Scene() {
       <SnapHints />
       <ToolOverlay />
       <RotatePreview />
+      <FieldHighlight />
     </>
   )
 }

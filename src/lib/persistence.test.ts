@@ -194,3 +194,22 @@ describe('designFilename', () => {
     expect(designFilename('???')).toBe('design.panelizer.json')
   })
 })
+
+describe('corner radii', () => {
+  it('round-trip through a file', () => {
+    const d = parse(JSON.stringify(serialize(design({ panels: [panel({ corners: [10, 0, 25.4, 0] })] }))))
+    expect(d.panels[0].corners).toEqual([10, 0, 25.4, 0])
+  })
+
+  it('are absent for older files (square corners)', () => {
+    expect(parse(JSON.stringify({ panels: [panel()] })).panels[0].corners).toBeUndefined()
+  })
+
+  it('are dropped when unusable, keeping the panel', () => {
+    for (const corners of [[1, 2, 3], [1, 2, 3, -4], [1, 2, 'x', 4], 'round']) {
+      const d = parse(JSON.stringify({ panels: [{ ...panel(), corners }] }))
+      expect(d.panels).toHaveLength(1)
+      expect(d.panels[0].corners).toBeUndefined()
+    }
+  })
+})

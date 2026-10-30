@@ -463,3 +463,32 @@ describe('generateCutlist — saw-friendly layouts', () => {
     }
   })
 })
+
+describe('generateCutlist — rounded corners', () => {
+  it('carries the radii onto the sheet, turned with the part', () => {
+    const straight = generateCutlist(
+      [panel({ length: 900, width: 500, grain: 'length', corners: [10, 20, 30, 40] })],
+      MATERIALS,
+      [sheet()],
+      0,
+      10,
+    )
+    expect(allPlacements(straight)[0].corners).toEqual([10, 20, 30, 40])
+
+    const turned = generateCutlist(
+      [panel({ length: 500, width: 900, grain: 'width', corners: [10, 20, 30, 40] })],
+      MATERIALS,
+      [sheet()],
+      0,
+      10,
+    )
+    expect(allPlacements(turned)[0].rotated).toBe(true)
+    expect(allPlacements(turned)[0].corners).toEqual([20, 30, 40, 10])
+  })
+
+  it('packs a rounded part by its rectangle, and leaves square parts plain', () => {
+    const r = generateCutlist([panel({ corners: [50, 50, 50, 50] }), panel()], MATERIALS, [sheet()], 3, 10)
+    expect(r.unplaced).toEqual([])
+    expect(allPlacements(r).filter((p) => p.corners)).toHaveLength(1)
+  })
+})

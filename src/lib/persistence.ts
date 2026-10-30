@@ -85,13 +85,19 @@ export function parse(json: string): Design {
       ? data.materials
       : defaultMaterials()
 
-  const panels = data.panels.filter(isUsablePanel).map((p) => ({
-    ...p,
-    id: typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID(),
-    name: typeof p.name === 'string' ? p.name : 'Panel',
-    materialId: findMaterial(materials, p.materialId).id,
-    grain: GRAINS.includes(p.grain) ? p.grain : defaultGrain(p.length, p.width),
-  }))
+  const panels = data.panels.filter(isUsablePanel).map((p) => {
+    const panel: Panel = {
+      ...p,
+      id: typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID(),
+      name: typeof p.name === 'string' ? p.name : 'Panel',
+      materialId: findMaterial(materials, p.materialId).id,
+      grain: GRAINS.includes(p.grain) ? p.grain : defaultGrain(p.length, p.width),
+    }
+    // Corner radii are optional: keep four usable numbers, drop anything else
+    // (the panel then simply has square corners).
+    if (!isCornerRadii(p.corners)) delete panel.corners
+    return panel
+  })
 
   return {
     name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : DEFAULT_NAME,
@@ -113,6 +119,9 @@ const UNITS: readonly unknown[] = ['mm', 'cm', 'inch']
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const positiveOr = (v: unknown, fallback: number) => (isFiniteNumber(v) && v > 0 ? v : fallback)
 const nonNegativeOr = (v: unknown, fallback: number) => (isFiniteNumber(v) && v >= 0 ? v : fallback)
+
+const isCornerRadii = (v: unknown): v is [number, number, number, number] =>
+  Array.isArray(v) && v.length === 4 && v.every((r) => isFiniteNumber(r) && r >= 0)
 
 /** Whether a stored panel has the geometry the viewport and nesting rely on. */
 function isUsablePanel(p: Partial<Panel> | null): p is Panel {

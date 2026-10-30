@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Panel } from '../../types/panel'
 import { buildParts, partsToCsv } from '../../lib/parts'
 import { formatMeasurement, UNIT_SUFFIX, type Unit } from '../../lib/units'
@@ -43,6 +43,11 @@ export function PartsPanel() {
       else next.add(key)
       return next
     })
+
+  // A row can disappear under the pointer (deleted, list collapsed): drop
+  // any hover highlight with it.
+  const setHoverIds = useDesignStore((s) => s.setHoverIds)
+  useEffect(() => () => setHoverIds([]), [setHoverIds])
 
   const copyCsv = () => navigator.clipboard.writeText(partsToCsv(rows, unit))
 
@@ -191,6 +196,7 @@ function GroupRow({
   children?: React.ReactNode
 }) {
   const fmt = (mm: number) => formatMeasurement(mm, unit)
+  const setHoverIds = useDesignStore((s) => s.setHoverIds)
   const expandable = row.quantity > 1
   const tip = useTooltip(
     expandable
@@ -204,6 +210,10 @@ function GroupRow({
         // An open group reads as a header for the rows it owns (see ui/tree).
         className={cx('cursor-pointer', treeGroup({ open, highlighted: selected }))}
         onClick={onSelect}
+        // Pointer (not mouse) events: the tooltip already owns this row's
+        // mouseenter / mouseleave.
+        onPointerEnter={() => setHoverIds(row.ids)}
+        onPointerLeave={() => setHoverIds([])}
         {...tip.trigger}
       >
         <td className="pl-1">
@@ -270,10 +280,13 @@ function ChildRow({
   onSelect: (e: React.MouseEvent) => void
   onToggleHidden: () => void
 }) {
+  const setHoverIds = useDesignStore((s) => s.setHoverIds)
   return (
     <tr
       className={cx('cursor-pointer', treeChild({ last, highlighted: selected }), panel.hidden && 'text-ink-faint')}
       onClick={onSelect}
+      onPointerEnter={() => setHoverIds([panel.id])}
+      onPointerLeave={() => setHoverIds([])}
     >
       <td className="pl-1">
         <EyeButton
@@ -303,7 +316,9 @@ function EyeButton({ hidden, onToggle, label }: { hidden: boolean; onToggle: () 
       type="button"
       className={cx(
         'flex cursor-pointer items-center justify-center rounded border-0 bg-transparent p-1 transition-colors',
-        hidden ? 'text-ink-faint hover:text-ink-dim' : 'text-ink-dim hover:bg-surface-3 hover:text-ink',
+        // A hidden panel's eye is amber, so hidden parts stand out down the list
+        // instead of fading into the dimmed row.
+        hidden ? 'text-snap-middle hover:bg-surface-3' : 'text-ink-dim hover:bg-surface-3 hover:text-ink',
       )}
       onClick={(e) => {
         e.stopPropagation()

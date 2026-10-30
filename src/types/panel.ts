@@ -41,6 +41,10 @@ export interface Panel {
    *  can't be clicked or dragged in the viewport. Toggled from the parts list.
    *  Absent/false means it's a normal, solid, clickable panel. */
   hidden?: boolean
+  /** Corner radii (mm) of the length × width face, one per corner in the
+   *  face's own frame — see `lib/rounding.ts` for the numbering. Absent means
+   *  square corners. Rounding stays inside the panel's rectangle. */
+  corners?: [number, number, number, number]
 }
 
 /** Woodworking default: grain runs along the longer face edge. Ties go to

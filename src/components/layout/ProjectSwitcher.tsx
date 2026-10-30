@@ -90,7 +90,7 @@ export function ProjectSwitcher() {
                         openProject(entry.id)
                       }}
                     >
-                      <span className={cx('max-w-64 truncate', entry.id === projectId ? 'text-accent' : 'text-ink')}>
+                      <span className={cx('max-w-64 truncate', entry.id === projectId ? 'text-accent-ink' : 'text-ink')}>
                         {entry.name}
                       </span>
                       <span className="text-micro text-ink-faint">
