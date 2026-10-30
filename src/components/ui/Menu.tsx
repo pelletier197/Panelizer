@@ -74,18 +74,28 @@ export function MenuItem({
   onClick,
   disabled,
   danger,
+  title,
+  onPreview,
   children,
 }: {
   onClick: () => void
   disabled?: boolean
   danger?: boolean
+  title?: string
+  /** Pointed at or focused (true), or left (false) — to preview what it does. */
+  onPreview?: (on: boolean) => void
   children: ReactNode
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
+      title={title}
       onClick={onClick}
+      onMouseEnter={onPreview && (() => onPreview(true))}
+      onMouseLeave={onPreview && (() => onPreview(false))}
+      onFocus={onPreview && (() => onPreview(true))}
+      onBlur={onPreview && (() => onPreview(false))}
       className={cx(
         'cursor-pointer border-0 bg-transparent px-3 py-1.5 text-left text-ink',
         'hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40',

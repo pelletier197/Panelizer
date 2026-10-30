@@ -206,3 +206,6 @@ export function useEscapeToClose(open: boolean, close: () => void) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, close])
 }
+
+/** A sheet's key for previews: its group and its number in it. */
+export const sheetKey = (groupKey: string, index: number) => `${groupKey}:${index}`

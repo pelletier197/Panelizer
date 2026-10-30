@@ -152,9 +152,9 @@ export function designFilename(name: string): string {
   return `${slugify(name) || 'design'}.panelizer.json`
 }
 
-/** Trigger a browser download of `text` as a file. */
-export function downloadText(text: string, filename: string, type: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type }))
+/** Trigger a browser download of some text or bytes as a file. */
+export function downloadFile(data: string | Uint8Array, filename: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([data as BlobPart], { type }))
   const link = document.createElement('a')
   link.href = url
   link.download = filename
@@ -164,7 +164,7 @@ export function downloadText(text: string, filename: string, type: string): void
 
 /** Trigger a browser download of `data` as a pretty-printed JSON file. */
 export function downloadJson(data: unknown, filename: string): void {
-  downloadText(JSON.stringify(data, null, 2), filename, 'application/json')
+  downloadFile(JSON.stringify(data, null, 2), filename, 'application/json')
 }
 
 /** Trigger a browser download of the design as a `.panelizer.json` file named

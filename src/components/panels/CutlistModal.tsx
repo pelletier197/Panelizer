@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDesignStore } from '../../store/designStore'
-import { sheetDxf, sheetDxfFilename } from '../../lib/dxf'
+import { allSheetsZipFilename, sheetDxf, sheetDxfFilename } from '../../lib/dxf'
 import type { CutlistResult } from '../../lib/nesting'
-import { downloadText } from '../../lib/persistence'
+import { downloadFile } from '../../lib/persistence'
+import { zip } from '../../lib/zip'
 import { formatMeasurement } from '../../lib/units'
 import { Button } from '../ui/Button'
 import { Kbd } from '../ui/Kbd'
@@ -15,7 +16,7 @@ import { CutResult } from './cutlist/CutResult'
 import { GrainEditor } from './cutlist/GrainEditor'
 import { StockList } from './cutlist/StockList'
 import { useCursorTooltip } from './cutlist/tooltip'
-import { useCutlistModel, useEscapeToClose, usePrintMode } from './cutlist/useCutlistModel'
+import { sheetKey, useCutlistModel, useEscapeToClose, usePrintMode } from './cutlist/useCutlistModel'
 
 /** Controls-panel width bounds + persisted UI preference. */
 const CONTROLS_MIN = 240
@@ -49,6 +50,8 @@ export function CutlistModal() {
   // Panels currently hovered — shared between the grain list and the cut
   // diagrams so hovering either side highlights the matching parts.
   const [hovered, setHovered] = useState<string[] | null>(null)
+  // Sheets the Export item being pointed at would export, outlined.
+  const [exportPreview, setExportPreview] = useState<string[] | null>(null)
 
   useEscapeToClose(open, () => setOpen(false))
 
@@ -78,7 +81,7 @@ export function CutlistModal() {
       >
         <header className="flex h-13 shrink-0 items-center gap-4 border-b border-edge bg-surface px-4 print:hidden">
           <h2 className="m-0 flex-1 text-base font-semibold">Cutlist</h2>
-          <ExportMenu result={model.result} pending={model.pending} />
+          <ExportMenu result={model.result} pending={model.pending} onPreview={setExportPreview} />
           {/* Close is fenced off behind a divider so it can't be fat-fingered
               while reaching for Export. */}
           <span className="h-6 w-px bg-edge" />
@@ -123,6 +126,7 @@ export function CutlistModal() {
             showTip={tooltip.show}
             hideTip={tooltip.hide}
             printing={printing}
+            previewSheets={exportPreview}
           />
         </div>
 
@@ -134,19 +138,51 @@ export function CutlistModal() {
 
 /**
  * Ways out of the app for the layout: printing (or saving as PDF from the print
- * dialog), and a DXF per sheet for CNC software — one file per sheet, as a CNC
- * cuts one sheet per job.
+ * dialog), and DXF for CNC software — every sheet at once as a .zip, or one
+ * sheet, as a CNC cuts one sheet per job. Pointing at an item outlines the
+ * sheets it exports.
  */
-function ExportMenu({ result, pending }: { result: CutlistResult; pending: boolean }) {
+function ExportMenu({
+  result,
+  pending,
+  onPreview,
+}: {
+  result: CutlistResult
+  pending: boolean
+  onPreview: (sheetKeys: string[] | null) => void
+}) {
   const projectName = useDesignStore((s) => s.name)
   const unit = useDesignStore((s) => s.unit)
-  const sheets = result.groups.flatMap((group) => group.sheets.map((sheet) => ({ group, sheet })))
+  const sheets = result.groups.flatMap((group) =>
+    group.sheets.map((sheet) => ({
+      group,
+      sheet,
+      key: sheetKey(group.key, sheet.index),
+      filename: sheetDxfFilename(projectName, group, sheet),
+    })),
+  )
+  const allKeys = sheets.map((s) => s.key)
+  const preview = (keys: string[]) => (on: boolean) => onPreview(on ? keys : null)
+
+  const exportAll = () => {
+    // Two groups can share a material name and thickness; keep their files apart.
+    const seen = new Map<string, number>()
+    const files = sheets.map(({ sheet, filename }) => {
+      const n = (seen.get(filename) ?? 0) + 1
+      seen.set(filename, n)
+      return { name: n === 1 ? filename : filename.replace(/.dxf$/, `-${n}.dxf`), text: sheetDxf(sheet) }
+    })
+    downloadFile(zip(files), allSheetsZipFilename(projectName), 'application/zip')
+  }
 
   return (
     <Menu label="Export" align="right">
       {(close) => (
         <MenuList>
+          <ClearOnClose onClear={() => onPreview(null)} />
           <MenuItem
+            title="Print the cut diagrams and parts list, or save them as a PDF from the print dialog"
+            onPreview={preview(allKeys)}
             onClick={() => {
               close()
               // After the menu has closed, so the dialog opens on a clean page.
@@ -160,14 +196,29 @@ function ExportMenu({ result, pending }: { result: CutlistResult; pending: boole
           </MenuItem>
           <MenuLabel>DXF for CNC · mm</MenuLabel>
           {sheets.length === 0 && <MenuItem disabled onClick={() => {}}>No sheets laid out yet</MenuItem>}
-          {sheets.map(({ group, sheet }) => (
+          {sheets.length > 1 && (
             <MenuItem
-              key={`${group.key}-${sheet.index}`}
               // A layout still being worked out would export the previous one.
               disabled={pending}
+              title={`Downloads ${allSheetsZipFilename(projectName)}: one DXF per sheet`}
+              onPreview={preview(allKeys)}
               onClick={() => {
                 close()
-                downloadText(sheetDxf(sheet), sheetDxfFilename(projectName, group, sheet), 'application/dxf')
+                exportAll()
+              }}
+            >
+              All {sheets.length} sheets <span className="text-ink-dim">· .zip</span>
+            </MenuItem>
+          )}
+          {sheets.map(({ group, sheet, key, filename }) => (
+            <MenuItem
+              key={key}
+              disabled={pending}
+              title={`Downloads ${filename}`}
+              onPreview={preview([key])}
+              onClick={() => {
+                close()
+                downloadFile(sheetDxf(sheet), filename, 'application/dxf')
               }}
             >
               <span className="flex items-center gap-1.5">
@@ -181,4 +232,13 @@ function ExportMenu({ result, pending }: { result: CutlistResult; pending: boole
       )}
     </Menu>
   )
+}
+
+/** Runs `onClear` when the menu closes (its contents unmount) — however it
+ *  closes, so no preview is left lit behind it. */
+function ClearOnClose({ onClear }: { onClear: () => void }) {
+  const latest = useRef(onClear)
+  latest.current = onClear
+  useEffect(() => () => latest.current(), [])
+  return null
 }

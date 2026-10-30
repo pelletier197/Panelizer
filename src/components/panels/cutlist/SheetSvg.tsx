@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Placement, SheetLayout } from '../../../lib/nesting'
 import { roundedRectPath, squaredCornersPath, type CornerRadii } from '../../../lib/rounding'
 import { formatMeasurement, type Unit } from '../../../lib/units'
@@ -30,6 +31,8 @@ export function SheetSvg({
   showTip,
   hideTip,
   printing,
+  previewed,
+  reveal,
 }: {
   sheet: SheetLayout
   scale: number
@@ -41,14 +44,26 @@ export function SheetSvg({
   showTip: (e: { clientX: number; clientY: number }, text: string) => void
   hideTip: () => void
   printing: boolean
+  /** Outlined: an export being pointed at includes this sheet. */
+  previewed: boolean
+  /** Scrolled into view, for the first sheet of such a preview. */
+  reveal: boolean
 }) {
+  const figureRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (reveal) figureRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [reveal])
   const W = sheet.length * scale
   const H = sheet.width * scale
   const label = (mm: number) => formatMeasurement(mm, unit)
   const { plan, legend } = planPlacements(sheet.placements, scale, label, printing)
 
   return (
-    <figure data-sheet className="m-0">
+    <figure
+      data-sheet
+      ref={figureRef}
+      className={cx('m-0 rounded-sm outline-2 outline-offset-4 transition-[outline-color]', previewed ? 'outline-accent' : 'outline-transparent')}
+    >
       <svg width={W} height={H} className="block rounded-xs" role="img">
         <rect x={0} y={0} width={W} height={H} data-sheet-bg
           className="fill-surface-2 stroke-edge" />

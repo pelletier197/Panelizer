@@ -140,6 +140,9 @@ export function sheetDxf(sheet: SheetLayout): string {
   ].join('\n') + '\n'
 }
 
+/** The file name for every sheet's DXF together, zipped. */
+export const allSheetsZipFilename = (project: string) => `${slugify(project) || 'panelizer'}-dxf.zip`
+
 /** File name for one sheet: project, material and thickness, sheet number. */
 export function sheetDxfFilename(project: string, group: StockGroup, sheet: SheetLayout): string {
   const parts = [slugify(project) || 'panelizer', slugify(group.materialName), `${num(group.thickness)}mm`]
