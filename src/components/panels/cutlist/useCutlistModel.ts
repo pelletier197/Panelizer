@@ -199,9 +199,13 @@ export function useEscapeToClose(open: boolean, close: () => void) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
+      // An open menu inside the dialog takes Escape first.
+      if (e.key === 'Escape' && !e.defaultPrevented) close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, close])
 }
+
+/** A sheet's key for previews: its group and its number in it. */
+export const sheetKey = (groupKey: string, index: number) => `${groupKey}:${index}`

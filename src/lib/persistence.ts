@@ -136,27 +136,35 @@ function isUsablePanel(p: Partial<Panel> | null): p is Panel {
   )
 }
 
-/** A filesystem-safe file name for a design: its name, lower-cased, with runs
- *  of anything but letters and digits turned into single dashes. */
-export function designFilename(name: string): string {
-  const slug = name
+/** A filesystem-safe piece of a file name: lower-cased, with runs of anything
+ *  but letters and digits turned into single dashes. Empty if nothing's left. */
+export function slugify(name: string): string {
+  return name
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '') // strip accents: é → e
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-  return `${slug || 'design'}.panelizer.json`
 }
 
-/** Trigger a browser download of `data` as a pretty-printed JSON file. */
-export function downloadJson(data: unknown, filename: string): void {
-  const json = JSON.stringify(data, null, 2)
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+/** A filesystem-safe file name for a design, after its name. */
+export function designFilename(name: string): string {
+  return `${slugify(name) || 'design'}.panelizer.json`
+}
+
+/** Trigger a browser download of some text or bytes as a file. */
+export function downloadFile(data: string | Uint8Array, filename: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([data as BlobPart], { type }))
   const link = document.createElement('a')
   link.href = url
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+/** Trigger a browser download of `data` as a pretty-printed JSON file. */
+export function downloadJson(data: unknown, filename: string): void {
+  downloadFile(JSON.stringify(data, null, 2), filename, 'application/json')
 }
 
 /** Trigger a browser download of the design as a `.panelizer.json` file named

@@ -3,7 +3,7 @@ import { partNames, type PartRow } from '../../../lib/parts'
 import { formatMeasurement, type Unit } from '../../../lib/units'
 import { useDesignStore } from '../../../store/designStore'
 import { SheetSvg } from './SheetSvg'
-import type { MissingStock } from './useCutlistModel'
+import { sheetKey, type MissingStock } from './useCutlistModel'
 import { Button } from '../../ui/Button'
 import { Hint, Swatch } from '../../ui/Panel'
 import { cx } from '../../ui/cx'
@@ -27,6 +27,7 @@ export function CutResult({
   showTip,
   hideTip,
   printing,
+  previewSheets,
 }: {
   result: CutlistResult
   /** A newer layout is being worked out; `result` is the previous one. */
@@ -41,6 +42,9 @@ export function CutResult({
   showTip: (e: { clientX: number; clientY: number }, text: string) => void
   hideTip: () => void
   printing: boolean
+  /** Sheets an export being pointed at would export, to outline (keys from
+   *  `sheetKey`). The first is scrolled into view. */
+  previewSheets: string[] | null
 }) {
   const updatePanels = useDesignStore((s) => s.updatePanels)
   const fmt = (mm: number) => formatMeasurement(mm, unit)
@@ -96,6 +100,8 @@ export function CutResult({
                   showTip={showTip}
                   hideTip={hideTip}
                   printing={printing}
+                  previewed={previewSheets?.includes(sheetKey(group.key, sheet.index)) ?? false}
+                  reveal={previewSheets?.[0] === sheetKey(group.key, sheet.index)}
                 />
               ))}
             </div>
