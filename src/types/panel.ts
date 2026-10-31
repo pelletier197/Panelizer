@@ -30,9 +30,14 @@ export interface Panel {
   thickness: number
   position: [number, number, number]
   materialId: string
-  /** Which face edge the grain runs along, for cutlist nesting. Defaults to the
-   *  longer edge (see `defaultGrain`). */
+  /** Which face edge the grain runs along — for cutlist nesting, and the way
+   *  wood finishes are drawn. Defaults to the longer edge (see
+   *  `defaultGrain`), and keeps to it as the panel is resized (see
+   *  `followGrain`) unless set by hand. */
   grain: Grain
+  /** True once the grain was chosen by hand: it then stays put when the panel
+   *  is resized. Absent means automatic, along the longer edge. */
+  grainSet?: boolean
   /** When true the part is skipped by the cutlist nesting (e.g. it's already
    *  cut). Absent/false means it's included. */
   excludeFromCutlist?: boolean
