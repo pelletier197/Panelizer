@@ -16,9 +16,12 @@ export interface Variant {
   /** The photo texture (`public/textures/<id>-color.webp`): how much surface
    *  (metres) one copy covers; the strength of its relief map
    *  (`<id>-normal.webp`), absent for a surface flat enough not to need one;
-   *  and its gloss map's average roughness (`<id>-gloss.webp`, presentation
-   *  only), absent when it has none. */
-  photo: { metres: number; relief?: number; gloss?: number }
+   *  its gloss map's average roughness (`<id>-gloss.webp`, presentation
+   *  only), absent when it has none; and `turned` for a photo whose grain
+   *  runs up and down rather than across, turned a quarter to lie along the
+   *  part like the rest (only for one without relief, whose directions would
+   *  turn wrong). */
+  photo: { metres: number; relief?: number; gloss?: number; turned?: boolean }
 }
 
 export interface Swatch {
@@ -76,7 +79,7 @@ export const FINISHES: FinishInfo[] = [
       { id: 'oak', label: 'Oak', natural: '#7c644e', photo: { metres: 0.8, relief: 0.8, gloss: 0.504 } },
       { id: 'cherry', label: 'Cherry', natural: '#693918', photo: { metres: 0.8, relief: 0.5, gloss: 0.481 } },
       { id: 'walnut', label: 'Walnut', natural: '#42352f', photo: { metres: 0.8, relief: 0.6, gloss: 0.543 } },
-      { id: 'pine', label: 'Pine', natural: '#b07340', photo: { metres: 0.8, gloss: 0.482 } },
+      { id: 'pine', label: 'Pine', natural: '#b07340', photo: { metres: 0.8, gloss: 0.482, turned: true } },
     ],
     palette: [
       { name: 'Whitewash', color: '#e6ddcd' },

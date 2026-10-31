@@ -72,7 +72,7 @@ export function GrainEditor({
   }
 
   const setGrain = (ids: string[], grain: Grain) =>
-    updatePanels(ids, { grain })
+    updatePanels(ids, { grain, grainSet: true })
 
   const cycleGroupGrain = (ids: string[]) => {
     const shared = sharedGrain(ids)
@@ -217,7 +217,7 @@ export function GrainEditor({
                                 length={child.length}
                                 width={child.width}
                                 grain={child.grain}
-                                onClick={() => updatePanel(id, { grain: nextGrain(child.grain) })}
+                                onClick={() => updatePanel(id, { grain: nextGrain(child.grain), grainSet: true })}
                                 tipProps={tipProps}
                               />
                             </td>

@@ -5,7 +5,7 @@ import type { Design } from '../lib/persistence'
 import type { Material } from '../lib/materials'
 import type { Stock } from '../lib/stock'
 import type { Unit } from '../lib/units'
-import { createPanel, defaultThickness } from '../lib/panel'
+import { createPanel, defaultThickness, followGrain } from '../lib/panel'
 import { repairPrecision } from '../lib/repair'
 import type { PanelPatch } from '../lib/resize'
 import type { CutStyle } from '../lib/nesting'
@@ -315,9 +315,11 @@ const createDesignStore = () => create<DesignState>((set, get) => {
   }
 
   // Apply `fn` to the panels whose id is in `ids`, leaving the rest as-is.
+  // Every panel edit comes through here, so this is also where an automatic
+  // grain follows a resize onto the long edge.
   const mapPanels = (ids: Iterable<string>, fn: (p: Panel) => Panel): Panel[] => {
     const targets = new Set(ids)
-    return get().panels.map((p) => (targets.has(p.id) ? fn(p) : p))
+    return get().panels.map((p) => (targets.has(p.id) ? followGrain(p, fn(p)) : p))
   }
 
   // Merge each patch into its panel, leaving unpatched panels as-is.
@@ -438,7 +440,9 @@ const createDesignStore = () => create<DesignState>((set, get) => {
     restorePanels: (restore) => {
       const byId = new Map(restore.map((r) => [r.id, r.patch]))
       set({
-        panels: get().panels.map((p) => (byId.has(p.id) ? { ...p, ...byId.get(p.id)! } : p)),
+        // A cancelled resize puts the size back; an automatic grain goes back
+        // with it.
+        panels: get().panels.map((p) => (byId.has(p.id) ? followGrain(p, { ...p, ...byId.get(p.id)! }) : p)),
         dragOrigin: null,
       })
     },
