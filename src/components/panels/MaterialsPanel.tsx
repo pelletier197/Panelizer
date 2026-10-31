@@ -6,6 +6,7 @@ import { Section } from '../ui/Panel'
 import { finishInfo, variantOf } from '../../lib/finishes'
 import { MaterialPicker } from './MaterialPicker'
 import { swatchStyle } from '../ui/swatchStyle'
+import { usePhotos } from '../viewport/photos'
 
 /** Editor for the design's material list. A material is a name and a look —
  *  a finish and a colour; thickness is set per panel. Each material is one
@@ -16,6 +17,7 @@ export function MaterialsPanel() {
   const addMaterial = useDesignStore((s) => s.addMaterial)
   const updateMaterial = useDesignStore((s) => s.updateMaterial)
   const removeMaterial = useDesignStore((s) => s.removeMaterial)
+  usePhotos() // swatches show the finish photo once it arrives
 
   return (
     <Section

@@ -6,27 +6,34 @@ import {
   RepeatWrapping,
   RGBAFormat,
   SRGBColorSpace,
+  Vector2,
   type BufferGeometry,
+  type Color,
+  type Texture,
 } from 'three'
 import type { Panel } from '../../types/panel'
 import { axisField } from '../../lib/geometry'
-import { finishInfo } from '../../lib/finishes'
+import { finishInfo, variantOf } from '../../lib/finishes'
 import type { Material } from '../../lib/materials'
 import { drawPattern } from '../../lib/patterns'
+import { photoOf, stainFactor } from './photos'
 
 /**
- * How a material is drawn on a panel: its colour, a pattern texture for
- * finishes that have one, and how it catches the light.
+ * How a material is drawn on a panel: its colour, the finish's texture and
+ * relief, and how it catches the light.
  */
 export interface Look {
-  color: string
-  map: DataTexture | null
+  /** The paint colour; over a photo, the stain's factor on it. */
+  color: string | Color
+  map: Texture | null
+  normalMap: Texture | null
+  normalScale: Vector2
   roughness: number
   metalness: number
 }
 
-/** One texture per pattern, shared by every panel that uses it; drawn the
- *  first time it's needed. */
+/** One drawn texture per pattern, shared by every panel that uses it; drawn
+ *  the first time it's needed, and shown until the photo arrives. */
 const textures = new Map<string, DataTexture | null>()
 
 function textureFor(material: Material): DataTexture | null {
@@ -54,15 +61,25 @@ function textureFor(material: Material): DataTexture | null {
 }
 
 /**
- * The look of a material. Without an environment to reflect, metal renders
- * nearly black, so the editing view (`realistic` off) keeps it only a little
- * metallic; the presentation view has one and shows it fully.
+ * The look of a material: the finish's photo tinted by its stain once the
+ * photo has loaded, the drawn pattern tinted by its colour until then, or the
+ * flat colour for paint. Components using it re-render when a photo arrives
+ * (`usePhotos`).
+ *
+ * Without an environment to reflect, metal renders nearly black, so the
+ * editing view (`realistic` off) keeps it only a little metallic; the
+ * presentation view has one and shows it fully.
  */
 export function lookOf(material: Material, realistic = false): Look {
   const info = finishInfo(material.finish)
+  const variant = variantOf(material.finish, material.variant)
+  const photo = variant ? photoOf(variant) : null
+  const relief = variant?.photo.relief ?? 0
   return {
-    color: material.color,
-    map: textureFor(material),
+    color: photo && variant ? stainFactor(material.color, variant) : material.color,
+    map: photo?.color ?? textureFor(material),
+    normalMap: photo?.normal ?? null,
+    normalScale: new Vector2(relief, relief),
     roughness: info.roughness,
     metalness: realistic ? info.metalness : Math.min(info.metalness, 0.35),
   }

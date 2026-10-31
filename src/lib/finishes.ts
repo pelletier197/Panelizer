@@ -10,8 +10,13 @@ export type Finish = 'paint' | 'wood' | 'stone' | 'metal'
 export interface Variant {
   id: string
   label: string
-  /** The colour it has untreated, picked when you choose it. */
+  /** Its colour untreated: the photo's average colour, so picking it shows
+   *  the photo as it is (a stain then tints by how far it is from this). */
   natural: string
+  /** The photo texture (`public/textures/<id>-color.webp`): how much surface
+   *  (metres) one copy covers, and the strength of its relief map
+   *  (`<id>-normal.webp`), absent for a surface flat enough not to need one. */
+  photo: { metres: number; relief?: number }
 }
 
 export interface Swatch {
@@ -60,15 +65,14 @@ export const FINISHES: FinishInfo[] = [
     id: 'wood',
     label: 'Wood',
     variants: [
-      { id: 'maple', label: 'Maple', natural: '#e6cba0' },
-      { id: 'birch', label: 'Birch', natural: '#e8d3ab' },
-      { id: 'oak', label: 'Oak', natural: '#c9a46c' },
-      { id: 'cherry', label: 'Cherry', natural: '#b97c56' },
-      { id: 'walnut', label: 'Walnut', natural: '#7a5639' },
-      { id: 'pine', label: 'Pine', natural: '#ddb57c' },
+      { id: 'maple', label: 'Maple', natural: '#cd9d6f', photo: { metres: 0.8, relief: 0.5 } },
+      { id: 'birch', label: 'Birch', natural: '#d5a37e', photo: { metres: 0.8, relief: 0.5 } },
+      { id: 'oak', label: 'Oak', natural: '#7c644e', photo: { metres: 0.8, relief: 0.8 } },
+      { id: 'cherry', label: 'Cherry', natural: '#693918', photo: { metres: 0.8, relief: 0.5 } },
+      { id: 'walnut', label: 'Walnut', natural: '#42352f', photo: { metres: 0.8, relief: 0.6 } },
+      { id: 'pine', label: 'Pine', natural: '#b07340', photo: { metres: 0.8 } },
     ],
     palette: [
-      { name: 'Natural', color: '#e2c393' },
       { name: 'Whitewash', color: '#e6ddcd' },
       { name: 'Grey wash', color: '#b5aea3' },
       { name: 'Honey', color: '#d4a25c' },
@@ -86,10 +90,10 @@ export const FINISHES: FinishInfo[] = [
     id: 'stone',
     label: 'Stone',
     variants: [
-      { id: 'marble', label: 'Marble', natural: '#eeece8' },
-      { id: 'granite', label: 'Granite', natural: '#9a9894' },
-      { id: 'concrete', label: 'Concrete', natural: '#b7b4ae' },
-      { id: 'terrazzo', label: 'Terrazzo', natural: '#e4ded4' },
+      { id: 'marble', label: 'Marble', natural: '#e4e8eb', photo: { metres: 1.2 } },
+      { id: 'granite', label: 'Granite', natural: '#bab6b2', photo: { metres: 0.6 } },
+      { id: 'concrete', label: 'Concrete', natural: '#b8b8b8', photo: { metres: 1.1, relief: 0.6 } },
+      { id: 'terrazzo', label: 'Terrazzo', natural: '#dbd6d0', photo: { metres: 0.6 } },
     ],
     palette: [
       { name: 'Carrara white', color: '#efede9' },
@@ -107,8 +111,8 @@ export const FINISHES: FinishInfo[] = [
     id: 'metal',
     label: 'Metal',
     variants: [
-      { id: 'brushed', label: 'Brushed', natural: '#c7c9cc' },
-      { id: 'raw', label: 'Raw', natural: '#8e9196' },
+      { id: 'brushed', label: 'Brushed', natural: '#929598', photo: { metres: 0.5 } },
+      { id: 'raw', label: 'Raw', natural: '#b6babb', photo: { metres: 0.8 } },
     ],
     palette: [
       { name: 'Stainless', color: '#c7c9cc' },

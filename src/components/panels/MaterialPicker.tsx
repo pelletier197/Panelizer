@@ -5,6 +5,7 @@ import { usePersistentState } from '../../hooks/usePersistentState'
 import { MenuChoices, MenuLabel } from '../ui/Menu'
 import { cx } from '../ui/cx'
 import { swatchStyle } from '../ui/swatchStyle'
+import { usePhotos } from '../viewport/photos'
 
 /** Custom colours picked lately, offered again; a UI preference, not part of
  *  any design. */
@@ -30,6 +31,7 @@ export function MaterialPicker({
   const info = finishInfo(material.finish)
   const variant = variantOf(material.finish, material.variant)
   const [recent, setRecent] = usePersistentState<string[]>(RECENT_KEY, [], reviveRecent)
+  usePhotos() // swatches show the finish photo once it arrives
 
   const look = (color: string) => ({ color, finish: material.finish, variant: variant?.id })
 
@@ -87,7 +89,7 @@ export function MaterialPicker({
 
       <MenuLabel>{material.finish && material.finish !== 'paint' ? 'Colour · stain' : 'Colour'}</MenuLabel>
       <div className="mx-3 grid grid-cols-6 gap-1">
-        {info.palette.map((s) => (
+        {(variant ? [{ name: `Natural ${variant.label.toLowerCase()}`, color: variant.natural }, ...info.palette] : info.palette).map((s) => (
           <ColorChip
             key={s.color}
             title={s.name}

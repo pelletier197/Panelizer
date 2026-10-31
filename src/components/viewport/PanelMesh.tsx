@@ -11,6 +11,7 @@ import { ResizeHandles } from './ResizeHandles'
 import { palette } from './palette'
 import { panelGeometry } from './panelGeometry'
 import { lookOf } from './finishLook'
+import { usePhotos } from './photos'
 import { useGesture, type GestureSpec } from './useGesture'
 import { useCompact } from '../../hooks/useMedia'
 
@@ -62,6 +63,7 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   const unit = useDesignStore((s) => s.unit)
   const precision = useDesignStore((s) => s.precision)
   const material = useDesignStore((s) => findMaterial(s.materials, panel.materialId))
+  usePhotos() // re-render when the finish's photo arrives
   const look = lookOf(material)
 
   const paint = palette()
@@ -276,9 +278,11 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
             it rendering opaque — or when a texture comes or goes, which needs
             its shader rebuilt. */}
         <meshStandardMaterial
-          key={hidden ? 'ghost' : (look.map?.uuid ?? 'flat')}
+          key={hidden ? 'ghost' : `${look.map?.uuid ?? 'flat'}:${look.normalMap?.uuid ?? ''}`}
           color={hidden ? paint.ghost : look.color}
           map={hidden ? null : look.map}
+          normalMap={hidden ? null : look.normalMap}
+          normalScale={look.normalScale}
           roughness={look.roughness}
           metalness={hidden ? 0 : look.metalness}
           transparent={hidden}

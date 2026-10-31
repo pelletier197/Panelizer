@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { CanvasTexture, PerspectiveCamera, Vector3, VSMShadowMap } from 'three'
+import { CanvasTexture, NeutralToneMapping, PerspectiveCamera, Vector3, VSMShadowMap } from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
@@ -11,6 +11,7 @@ import { downloadFile, slugify } from '../../lib/persistence'
 import { useDesignStore } from '../../store/designStore'
 import { panelGeometry } from '../viewport/panelGeometry'
 import { lookOf } from '../viewport/finishLook'
+import { usePhotos } from '../viewport/photos'
 import { useEscapeToClose } from '../panels/cutlist/useCutlistModel'
 import { Button } from '../ui/Button'
 import { cx } from '../ui/cx'
@@ -112,7 +113,7 @@ function Presentation({ onClose }: { onClose: () => void }) {
             shadows={{ type: VSMShadowMap }}
             dpr={[1, 2]}
             // Kept so a frame can be read back for saving.
-            gl={{ preserveDrawingBuffer: true, antialias: true }}
+            gl={{ preserveDrawingBuffer: true, antialias: true, toneMapping: NeutralToneMapping }}
             camera={{ fov: FOV, near: 0.01, far: 100 }}
           >
             <color attach="background" args={[BACKGROUND]} />
@@ -235,7 +236,12 @@ function Scene({
       {/* Soft studio light from big light panels around the model — built in
           the scene, so nothing is downloaded — plus a key light for the model's
           own shadows. */}
-      <Environment resolution={256}>
+      {/* Bright enough that a white finish reads white (light here is in
+          physical units: a surface takes in 1/π of it). */}
+      <Environment resolution={256} environmentIntensity={1.2}>
+        {/* A soft surround, as in a real studio: metal shows only what it
+            reflects, and against black it would render black. */}
+        <color attach="background" args={['#a49f97']} />
         <Lightformer form="rect" intensity={2.2} position={[0, 4, 3]} scale={[8, 4, 1]} />
         <Lightformer form="rect" intensity={1.2} position={[-5, 2, -1]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} />
         <Lightformer form="rect" intensity={1.2} position={[5, 2, -1]} rotation-y={-Math.PI / 2} scale={[6, 3, 1]} />
@@ -248,7 +254,7 @@ function Scene({
         // shadow pools under and around the piece, and inside it under the top.
         // (Lights aim at the origin, which the design sits near.)
         position={[centre.x + radius * 0.8, floor + radius * 6, centre.z + radius * 2.2]}
-        intensity={1.1}
+        intensity={2}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0002}
         shadow-radius={8}
@@ -268,7 +274,9 @@ function Scene({
       <GroundShadow bounds={bounds} />
       {/* The floor it stands on: invisible but for the shadow falling on it. */}
       <mesh rotation-x={-Math.PI / 2} position={[centre.x, floor, centre.z]} receiveShadow>
-        <planeGeometry args={[radius * 40, radius * 40]} />
+        {/* Only as far as the key light's shadows are worked out (±2 radii);
+            beyond it they come out as stray marks on the horizon. */}
+        <planeGeometry args={[radius * 4, radius * 4]} />
         <shadowMaterial transparent opacity={0.42} color="#3a332b" />
       </mesh>
 
@@ -288,10 +296,20 @@ function Scene({
 const PresentPanel = memo(function PresentPanel({ panel, material }: { panel: Panel; material: Material }) {
   const geometry = useMemo(() => panelGeometry(panel), [panel])
   useEffect(() => () => geometry.dispose(), [geometry])
+  usePhotos() // re-render when the finish's photo arrives
   const look = lookOf(material, true)
   return (
     <mesh geometry={geometry} position={toMetres(panel.position)} castShadow receiveShadow>
-      <meshStandardMaterial color={look.color} map={look.map} roughness={look.roughness} metalness={look.metalness} />
+      <meshStandardMaterial
+        // A texture coming or going needs the shader rebuilt.
+        key={`${look.map?.uuid ?? 'flat'}:${look.normalMap?.uuid ?? ''}`}
+        color={look.color}
+        map={look.map}
+        normalMap={look.normalMap}
+        normalScale={look.normalScale}
+        roughness={look.roughness}
+        metalness={look.metalness}
+      />
     </mesh>
   )
 })
