@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Panel } from '../../types/panel'
+import { defaultGrain, type Grain, type Panel } from '../../types/panel'
+import { isAutoGrain } from '../../lib/panel'
 import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
@@ -151,6 +152,17 @@ function HighlightZone({ target, children }: { target: FieldHighlight; children:
 }
 
 /** The value every panel agrees on, or undefined when they differ. */
+/** How a panel's grain is chosen: automatically (the long edge, following
+ *  resizes), or by hand along an edge, or none. */
+type GrainMode = 'auto' | Grain
+
+const GRAIN_MODES: { mode: GrainMode; label: string; title: string }[] = [
+  { mode: 'auto', label: 'Auto', title: 'Along the longer edge, following it as the panel is resized' },
+  { mode: 'length', label: 'Length', title: "Along the panel's length, whatever its size" },
+  { mode: 'width', label: 'Width', title: "Along the panel's width, whatever its size" },
+  { mode: 'none', label: 'Any', title: 'No grain to keep: the cutlist may turn the part to fit (and wood shows along its length)' },
+]
+
 function shared<T>(panels: Panel[], read: (p: Panel) => T): T | undefined {
   const first = read(panels[0])
   return panels.every((p) => read(p) === first) ? first : undefined
@@ -217,6 +229,15 @@ export function PropertiesPanel() {
 
   const name = shared(selected, (p) => p.name)
   const material = shared(selected, (p) => p.materialId)
+  // Automatic grain shows as Auto; any other, as the edge it runs along.
+  const grainMode = shared(selected, (p): GrainMode => (isAutoGrain(p) ? 'auto' : p.grain))
+  const setGrainMode = (mode: GrainMode) =>
+    mode === 'auto'
+      ? // Back to automatic: each panel's grain to its own long edge.
+        commitPanelPatches(
+          selected.map((p) => ({ id: p.id, patch: { grain: defaultGrain(p.length, p.width), grainSet: undefined } })),
+        )
+      : update({ grain: mode, grainSet: true })
   const length = shared(selected, (p) => p.length)
   const width = shared(selected, (p) => p.width)
   const thickness = shared(selected, (p) => p.thickness)
@@ -318,6 +339,27 @@ export function PropertiesPanel() {
           </option>
         ))}
       </SelectField>
+
+      {/* Grain: how the cutlist may lay the part on the sheet, and the way a
+          wood finish is drawn on it. Not a <Field>, for the reason below. */}
+      <div className="flex items-center gap-2 py-[3px]">
+        <span className="text-small w-20 shrink-0 text-ink-dim">Grain</span>
+        <div className="flex flex-1 gap-1" role="group" aria-label="Grain direction">
+          {GRAIN_MODES.map(({ mode, label, title }) => (
+            <Button
+              key={mode}
+              size="sm"
+              className="flex-1"
+              variant={grainMode === mode ? 'primary' : 'default'}
+              aria-pressed={grainMode === mode}
+              title={title}
+              onClick={() => setGrainMode(mode)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       {/* Not a <Field>: that wraps its row in a <label>, and a click on the
           label text would press the first button. */}

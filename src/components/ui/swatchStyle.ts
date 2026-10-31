@@ -46,6 +46,12 @@ function photoSwatch(variant: Variant, color: string): string | null {
   canvas.width = canvas.height = SWATCH_PX
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
+  if (variant.photo.turned) {
+    // As the 3D view shows it: grain running across.
+    ctx.translate(SWATCH_PX / 2, SWATCH_PX / 2)
+    ctx.rotate(Math.PI / 2)
+    ctx.translate(-SWATCH_PX / 2, -SWATCH_PX / 2)
+  }
   ctx.drawImage(photo.image, 0, 0, SWATCH_PX, SWATCH_PX)
   const pixels = ctx.getImageData(0, 0, SWATCH_PX, SWATCH_PX)
   const f = stainFactor(color, variant)

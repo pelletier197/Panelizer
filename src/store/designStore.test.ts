@@ -295,3 +295,46 @@ describe('projects', () => {
     expect(store().openProject('missing')).toBe(false)
   })
 })
+
+describe('grain follows the long edge', () => {
+  it('moves an automatic grain when a resize makes the other edge the longer one', () => {
+    // a: 600 × 400, grain along its length.
+    store().updatePanels(['a'], { length: 300, width: 1200 })
+    expect(byId('a').grain).toBe('width')
+    store().updatePanels(['a'], { length: 1500 })
+    expect(byId('a').grain).toBe('length')
+  })
+
+  it('follows a live resize drag, and goes back with it when cancelled', () => {
+    store().patchPanelsLive([{ id: 'a', patch: { width: 900 } }])
+    expect(byId('a').grain).toBe('width')
+    store().restorePanels([{ id: 'a', patch: { width: 400 } }])
+    expect(byId('a').grain).toBe('length')
+  })
+
+  it('leaves a grain set by hand where it was put', () => {
+    store().updatePanels(['a'], { grain: 'width', grainSet: true })
+    store().updatePanels(['a'], { length: 2000 })
+    expect(byId('a').grain).toBe('width')
+  })
+
+  it('leaves "no grain" alone', () => {
+    store().updatePanels(['a'], { grain: 'none', grainSet: true })
+    store().updatePanels(['a'], { width: 2000 })
+    expect(byId('a').grain).toBe('none')
+  })
+
+  it('takes an edit that sets the grain itself as it is', () => {
+    // As a quarter turn does: new size and the grain it re-derived.
+    store().updatePanels(['a'], { length: 400, width: 600, grain: 'width' })
+    expect(byId('a').grain).toBe('width')
+  })
+})
+
+describe('grain from older files', () => {
+  it('keeps a grain on the short edge, as the choice it was', () => {
+    useDesignStore.setState({ panels: [panel({ id: 'old', length: 800, width: 260, grain: 'width' })] })
+    store().updatePanels(['old'], { length: 900 })
+    expect(byId('old').grain).toBe('width')
+  })
+})

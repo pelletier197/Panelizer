@@ -38,3 +38,26 @@ export function createPanel(overrides: Partial<Panel> = {}): Panel {
   if (overrides.grain === undefined) merged.grain = defaultGrain(merged.length, merged.width)
   return merged
 }
+
+/**
+ * Keep an automatic grain on the long edge after an edit. When an edit changes
+ * a panel's length or width — a resize, a typed size — and its grain wasn't
+ * set by hand, the grain moves to whichever edge is now the longer one, as
+ * it would on a board cut to that size. Left alone: a grain that isn't
+ * automatic (see `isAutoGrain`), and an edit that set the grain itself (a
+ * quarter turn re-derives it).
+ */
+export function followGrain(before: Panel, after: Panel): Panel {
+  if (!isAutoGrain(before) || after.grainSet || after.grain !== before.grain) return after
+  if (after.length === before.length && after.width === before.width) return after
+  const grain = defaultGrain(after.length, after.width)
+  return grain === after.grain ? after : { ...after, grain }
+}
+
+/**
+ * Whether a panel's grain is automatic: not set by hand, and on its longer
+ * edge. Files from before `grainSet` existed don't say; a grain that runs
+ * any other way there was a choice, and is kept as one.
+ */
+export const isAutoGrain = (p: Pick<Panel, 'grain' | 'grainSet' | 'length' | 'width'>): boolean =>
+  !p.grainSet && p.grain !== 'none' && p.grain === defaultGrain(p.length, p.width)

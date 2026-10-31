@@ -98,6 +98,8 @@ export function parse(json: string): Design {
     // Corner radii are optional: keep four usable numbers, drop anything else
     // (the panel then simply has square corners).
     if (!isCornerRadii(p.corners)) delete panel.corners
+    // Only a real "set by hand" survives; anything else means automatic.
+    if (p.grainSet !== true) delete panel.grainSet
     return panel
   })
 

@@ -29,3 +29,9 @@ describe('stainFactor', () => {
     }
   })
 })
+
+describe('turned photos', () => {
+  it('turns only photos without relief, whose directions would turn wrong', () => {
+    for (const v of FINISHES.flatMap((f) => f.variants).filter((v) => v.photo.turned)) expect(v.photo.relief).toBeUndefined()
+  })
+})

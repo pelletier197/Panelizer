@@ -247,3 +247,13 @@ describe('parse — materials', () => {
     expect(materials[0].color).toMatch(/^#[0-9a-f]{6}$/i)
   })
 })
+
+describe('parse — grain set by hand', () => {
+  it('keeps a hand-set grain, and treats anything else as automatic', () => {
+    const file = (grainSet: unknown) =>
+      JSON.stringify({ panels: [{ id: 'a', name: 'A', normal: 'z', length: 600, width: 400, thickness: 18, position: [0, 0, 0], materialId: 'plywood', grain: 'width', grainSet }] })
+    expect(parse(file(true)).panels[0].grainSet).toBe(true)
+    expect(parse(file('yes')).panels[0]).not.toHaveProperty('grainSet')
+    expect(parse(file(undefined)).panels[0]).not.toHaveProperty('grainSet')
+  })
+})

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { CanvasTexture, NeutralToneMapping, PerspectiveCamera, Vector3, VSMShadowMap } from 'three'
+import { CanvasTexture, NeutralToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector3 } from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
@@ -33,6 +33,8 @@ const BACKGROUND = '#ebe8e3'
 /** Exported images are about this wide (px), whatever the screen. */
 const EXPORT_WIDTH = 2400
 const FOV = 35
+/** Key light shadow map resolution (px per side). */
+const SHADOW_MAP_PX = 4096
 const GLIDE_MS = 600
 
 const normalize = (v: Vec3): Vec3 => {
@@ -108,9 +110,10 @@ function Presentation({ onClose }: { onClose: () => void }) {
       <div className="relative min-h-0 flex-1">
         {bounds && (
           <Canvas
-            // Variance shadow maps: soft-edged, and free of the striping
-            // ordinary ones leave across flat faces lit at a slant.
-            shadows={{ type: VSMShadowMap }}
+            // Soft-edged shadow maps. (Variance shadow maps striped the floor
+            // and long panels on some GPUs; the key light's bias handles the
+            // self-shadowing instead.)
+            shadows={{ type: PCFSoftShadowMap }}
             dpr={[1, 2]}
             // Kept so a frame can be read back for saving.
             gl={{ preserveDrawingBuffer: true, antialias: true, toneMapping: NeutralToneMapping }}
@@ -255,10 +258,12 @@ function Scene({
         // (Lights aim at the origin, which the design sits near.)
         position={[centre.x + radius * 0.8, floor + radius * 6, centre.z + radius * 2.2]}
         intensity={2}
-        shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0002}
-        shadow-radius={8}
-        shadow-blurSamples={16}
+        shadow-mapSize={[SHADOW_MAP_PX, SHADOW_MAP_PX]}
+        shadow-bias={-0.0001}
+        // Offset along the surface normal by about two shadow-map texels: a
+        // texel covers (4 × radius) / SHADOW_MAP_PX here, so a long piece needs
+        // more. Too little and flat faces shadow themselves in stripes.
+        shadow-normalBias={((radius * 4) / SHADOW_MAP_PX) * 2}
         shadow-camera-left={-radius * 2}
         shadow-camera-right={radius * 2}
         shadow-camera-top={radius * 2}

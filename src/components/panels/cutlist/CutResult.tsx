@@ -132,7 +132,7 @@ export function CutResult({
         <section className="mb-6 rounded border border-danger/40 bg-danger/10 p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h3 className="m-0 text-sm font-semibold text-danger">Fits only if turned</h3>
-            <Button size="sm" onClick={() => updatePanels(grainLocked.map((u) => u.panelId), { grain: 'none' })}>
+            <Button size="sm" onClick={() => updatePanels(grainLocked.map((u) => u.panelId), { grain: 'none', grainSet: true })}>
               Allow turning
             </Button>
           </div>
