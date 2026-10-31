@@ -46,8 +46,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return image.decode().then(() => image)
 }
 
-function texture(image: HTMLImageElement, metres: number, colour: boolean): Texture {
+function texture(image: HTMLImageElement, metres: number, colour: boolean, turned = false): Texture {
   const t = new Texture(image)
+  // A photo shot with its grain up and down, turned to run along the part.
+  if (turned) t.rotation = Math.PI / 2
   t.colorSpace = colour ? SRGBColorSpace : NoColorSpace
   t.wrapS = t.wrapT = RepeatWrapping
   t.repeat.set(1 / metres, 1 / metres)
@@ -64,7 +66,7 @@ export function photoOf(variant: Variant, tier: Tier = 'view'): Photo | null {
   if (entry && entry !== 'loading' && entry !== 'failed') return entry
   if (!entry) {
     photos.set(key, 'loading')
-    const { metres, relief, gloss } = variant.photo
+    const { metres, relief, gloss, turned } = variant.photo
     const files = FILES[tier]
     Promise.all([
       loadImage(url(variant.id, files.color)),
@@ -74,9 +76,9 @@ export function photoOf(variant: Variant, tier: Tier = 'view'): Photo | null {
       .then(([image, normal, roughness]) => {
         photos.set(key, {
           image,
-          color: texture(image, metres, true),
-          normal: normal && texture(normal, metres, false),
-          gloss: roughness && texture(roughness, metres, false),
+          color: texture(image, metres, true, turned),
+          normal: normal && texture(normal, metres, false, turned),
+          gloss: roughness && texture(roughness, metres, false, turned),
         })
       })
       // Offline or missing: keep what's shown meanwhile.
