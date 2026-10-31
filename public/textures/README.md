@@ -5,8 +5,15 @@ licensed under [Creative Commons CC0 1.0 Universal](https://docs.ambientcg.com/l
 (public domain: free to use, modify and redistribute, no attribution required —
 credited here anyway).
 
-Each is the 1K JPG set's colour map, re-encoded as a 1024 px WebP, and, where
-the surface has relief worth showing, its OpenGL normal map as a 512 px WebP.
+Two sets per finish, re-encoded as WebP:
+
+- For editing (`<id>-color.webp`, `<id>-normal.webp`): the 1K JPG set's colour
+  map at 1024 px and, where the surface has relief worth showing, its OpenGL
+  normal map at 512 px.
+- For the presentation view, fetched only when it opens (`<id>-color-2k.webp`,
+  `<id>-normal-2k.webp`, `<id>-gloss.webp`): the 2K JPG set's colour map at
+  2048 px, normal map at 1024 px, and roughness map at 512 px (none for granite,
+  which is evenly polished).
 
 | File | ambientCG asset |
 | --- | --- |

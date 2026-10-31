@@ -7,7 +7,20 @@ import type { Variant } from '../../lib/finishes'
  * material uses one — so a design that is all paint never downloads any.
  * Until a photo arrives, callers get null and fall back to the drawn pattern;
  * components re-render when it does (`usePhotos`).
+ *
+ * Two sets per variant: the everyday one for editing and swatches, and a
+ * sharper one with gloss for the presentation view, fetched only when that
+ * opens (callers show the everyday set until it arrives).
  */
+
+/** Which set: `view` for editing, `present` for the presentation view. */
+export type Tier = 'view' | 'present'
+
+/** File suffixes of each set's maps; null where the set has none. */
+const FILES: Record<Tier, { color: string; normal: string; gloss: string | null }> = {
+  view: { color: 'color', normal: 'normal', gloss: null },
+  present: { color: 'color-2k', normal: 'normal-2k', gloss: 'gloss' },
+}
 
 export interface Photo {
   image: HTMLImageElement
@@ -16,13 +29,15 @@ export interface Photo {
   color: Texture
   /** Relief (normal map), when the variant has one. */
   normal: Texture | null
+  /** How glossy each spot is (roughness map), in the presentation set. */
+  gloss: Texture | null
 }
 
 const photos = new Map<string, Photo | 'loading' | 'failed'>()
 const listeners = new Set<() => void>()
 let version = 0
 
-const url = (id: string, kind: 'color' | 'normal') => `${import.meta.env.BASE_URL}textures/${id}-${kind}.webp`
+const url = (id: string, suffix: string) => `${import.meta.env.BASE_URL}textures/${id}-${suffix}.webp`
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   const image = new Image()
@@ -41,23 +56,31 @@ function texture(image: HTMLImageElement, metres: number, colour: boolean): Text
   return t
 }
 
-/** A variant's photo if it has arrived; otherwise null, and it starts loading. */
-export function photoOf(variant: Variant): Photo | null {
-  const entry = photos.get(variant.id)
+/** A variant's photo set if it has arrived; otherwise null, and it starts
+ *  loading. */
+export function photoOf(variant: Variant, tier: Tier = 'view'): Photo | null {
+  const key = `${variant.id}:${tier}`
+  const entry = photos.get(key)
   if (entry && entry !== 'loading' && entry !== 'failed') return entry
   if (!entry) {
-    photos.set(variant.id, 'loading')
-    const { metres, relief } = variant.photo
-    Promise.all([loadImage(url(variant.id, 'color')), relief ? loadImage(url(variant.id, 'normal')) : null])
-      .then(([image, normal]) => {
-        photos.set(variant.id, {
+    photos.set(key, 'loading')
+    const { metres, relief, gloss } = variant.photo
+    const files = FILES[tier]
+    Promise.all([
+      loadImage(url(variant.id, files.color)),
+      relief ? loadImage(url(variant.id, files.normal)) : null,
+      gloss && files.gloss ? loadImage(url(variant.id, files.gloss)) : null,
+    ])
+      .then(([image, normal, roughness]) => {
+        photos.set(key, {
           image,
           color: texture(image, metres, true),
           normal: normal && texture(normal, metres, false),
+          gloss: roughness && texture(roughness, metres, false),
         })
       })
-      // Offline or missing: keep the drawn pattern.
-      .catch(() => photos.set(variant.id, 'failed'))
+      // Offline or missing: keep what's shown meanwhile.
+      .catch(() => photos.set(key, 'failed'))
       .finally(() => {
         version++
         listeners.forEach((l) => l())

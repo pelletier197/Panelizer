@@ -23,6 +23,8 @@ import { photoOf, stainFactor } from './photos'
  * relief, and how it catches the light.
  */
 export interface Look {
+  /** Where the surface is glossier or duller; with it, `roughness` scales it. */
+  roughnessMap: Texture | null
   /** The paint colour; over a photo, the stain's factor on it. */
   color: string | Color
   map: Texture | null
@@ -73,14 +75,21 @@ function textureFor(material: Material): DataTexture | null {
 export function lookOf(material: Material, realistic = false): Look {
   const info = finishInfo(material.finish)
   const variant = variantOf(material.finish, material.variant)
-  const photo = variant ? photoOf(variant) : null
+  // The presentation view asks for the sharp set, showing the everyday one
+  // until it arrives.
+  const photo = variant ? ((realistic ? photoOf(variant, 'present') : null) ?? photoOf(variant)) : null
   const relief = variant?.photo.relief ?? 0
+  // A gloss map varies the roughness around the finish's own: scaled so its
+  // average lands there.
+  const glossAverage = variant?.photo.gloss
+  const gloss = photo?.gloss && glossAverage ? photo.gloss : null
   return {
     color: photo && variant ? stainFactor(material.color, variant) : material.color,
     map: photo?.color ?? textureFor(material),
     normalMap: photo?.normal ?? null,
     normalScale: new Vector2(relief, relief),
-    roughness: info.roughness,
+    roughnessMap: gloss,
+    roughness: gloss && glossAverage ? Math.min(4, info.roughness / glossAverage) : info.roughness,
     metalness: realistic ? info.metalness : Math.min(info.metalness, 0.35),
   }
 }

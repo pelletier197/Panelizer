@@ -14,9 +14,11 @@ export interface Variant {
    *  the photo as it is (a stain then tints by how far it is from this). */
   natural: string
   /** The photo texture (`public/textures/<id>-color.webp`): how much surface
-   *  (metres) one copy covers, and the strength of its relief map
-   *  (`<id>-normal.webp`), absent for a surface flat enough not to need one. */
-  photo: { metres: number; relief?: number }
+   *  (metres) one copy covers; the strength of its relief map
+   *  (`<id>-normal.webp`), absent for a surface flat enough not to need one;
+   *  and its gloss map's average roughness (`<id>-gloss.webp`, presentation
+   *  only), absent when it has none. */
+  photo: { metres: number; relief?: number; gloss?: number }
 }
 
 export interface Swatch {
@@ -41,22 +43,26 @@ export const FINISHES: FinishInfo[] = [
     id: 'paint',
     label: 'Paint',
     variants: [],
+    // The colours furniture painters keep coming back to, family by family —
+    // close to the best-selling shade in each (from paint makers' published
+    // colour values), named plainly rather than by brand.
     palette: [
       { name: 'Natural ply', color: '#d9b380' },
-      { name: 'Pure white', color: '#f4f2ec' },
-      { name: 'Alabaster', color: '#ece6d8' },
-      { name: 'Greige', color: '#c9bfae' },
-      { name: 'Light grey', color: '#b9bcbd' },
-      { name: 'Sage', color: '#a3ad92' },
-      { name: 'Olive', color: '#6f7350' },
-      { name: 'Forest', color: '#3f5446' },
-      { name: 'Powder blue', color: '#a7bccb' },
-      { name: 'Navy', color: '#2f3d55' },
-      { name: 'Terracotta', color: '#b56a4c' },
-      { name: 'Mustard', color: '#c99a3e' },
-      { name: 'Blush', color: '#d9b2a6' },
-      { name: 'Charcoal', color: '#3d3f42' },
-      { name: 'Black', color: '#1e1e20' },
+      { name: 'Warm white', color: '#efede4' },
+      { name: 'Alabaster', color: '#ede9df' },
+      { name: 'Greige', color: '#d1cbc1' },
+      { name: 'Mushroom', color: '#ada496' },
+      { name: 'Soft grey', color: '#c2bfb8' },
+      { name: 'Sage', color: '#b2b699' },
+      { name: 'Grey green', color: '#95978a' },
+      { name: 'Forest green', color: '#3b4a3f' },
+      { name: 'Misty blue', color: '#bfc9d0' },
+      { name: 'Navy', color: '#2f3d4c' },
+      { name: 'Slate blue', color: '#434c56' },
+      { name: 'Clay', color: '#ac6b53' },
+      { name: 'Bronze', color: '#54504a' },
+      { name: 'Charcoal', color: '#434341' },
+      { name: 'Soft black', color: '#2f2f30' },
     ],
     roughness: 0.6,
     metalness: 0,
@@ -65,12 +71,12 @@ export const FINISHES: FinishInfo[] = [
     id: 'wood',
     label: 'Wood',
     variants: [
-      { id: 'maple', label: 'Maple', natural: '#cd9d6f', photo: { metres: 0.8, relief: 0.5 } },
-      { id: 'birch', label: 'Birch', natural: '#d5a37e', photo: { metres: 0.8, relief: 0.5 } },
-      { id: 'oak', label: 'Oak', natural: '#7c644e', photo: { metres: 0.8, relief: 0.8 } },
-      { id: 'cherry', label: 'Cherry', natural: '#693918', photo: { metres: 0.8, relief: 0.5 } },
-      { id: 'walnut', label: 'Walnut', natural: '#42352f', photo: { metres: 0.8, relief: 0.6 } },
-      { id: 'pine', label: 'Pine', natural: '#b07340', photo: { metres: 0.8 } },
+      { id: 'maple', label: 'Maple', natural: '#cd9d6f', photo: { metres: 0.8, relief: 0.5, gloss: 0.567 } },
+      { id: 'birch', label: 'Birch', natural: '#d5a37e', photo: { metres: 0.8, relief: 0.5, gloss: 0.549 } },
+      { id: 'oak', label: 'Oak', natural: '#7c644e', photo: { metres: 0.8, relief: 0.8, gloss: 0.504 } },
+      { id: 'cherry', label: 'Cherry', natural: '#693918', photo: { metres: 0.8, relief: 0.5, gloss: 0.481 } },
+      { id: 'walnut', label: 'Walnut', natural: '#42352f', photo: { metres: 0.8, relief: 0.6, gloss: 0.543 } },
+      { id: 'pine', label: 'Pine', natural: '#b07340', photo: { metres: 0.8, gloss: 0.482 } },
     ],
     palette: [
       { name: 'Whitewash', color: '#e6ddcd' },
@@ -90,10 +96,10 @@ export const FINISHES: FinishInfo[] = [
     id: 'stone',
     label: 'Stone',
     variants: [
-      { id: 'marble', label: 'Marble', natural: '#e4e8eb', photo: { metres: 1.2 } },
+      { id: 'marble', label: 'Marble', natural: '#e4e8eb', photo: { metres: 1.2, gloss: 0.232 } },
       { id: 'granite', label: 'Granite', natural: '#bab6b2', photo: { metres: 0.6 } },
-      { id: 'concrete', label: 'Concrete', natural: '#b8b8b8', photo: { metres: 1.1, relief: 0.6 } },
-      { id: 'terrazzo', label: 'Terrazzo', natural: '#dbd6d0', photo: { metres: 0.6 } },
+      { id: 'concrete', label: 'Concrete', natural: '#b8b8b8', photo: { metres: 1.1, relief: 0.6, gloss: 0.516 } },
+      { id: 'terrazzo', label: 'Terrazzo', natural: '#dbd6d0', photo: { metres: 0.6, gloss: 0.223 } },
     ],
     palette: [
       { name: 'Carrara white', color: '#efede9' },
@@ -111,8 +117,8 @@ export const FINISHES: FinishInfo[] = [
     id: 'metal',
     label: 'Metal',
     variants: [
-      { id: 'brushed', label: 'Brushed', natural: '#929598', photo: { metres: 0.5 } },
-      { id: 'raw', label: 'Raw', natural: '#b6babb', photo: { metres: 0.8 } },
+      { id: 'brushed', label: 'Brushed', natural: '#929598', photo: { metres: 0.5, gloss: 0.469 } },
+      { id: 'raw', label: 'Raw', natural: '#b6babb', photo: { metres: 0.8, gloss: 0.193 } },
     ],
     palette: [
       { name: 'Stainless', color: '#c7c9cc' },

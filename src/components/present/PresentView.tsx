@@ -302,11 +302,12 @@ const PresentPanel = memo(function PresentPanel({ panel, material }: { panel: Pa
     <mesh geometry={geometry} position={toMetres(panel.position)} castShadow receiveShadow>
       <meshStandardMaterial
         // A texture coming or going needs the shader rebuilt.
-        key={`${look.map?.uuid ?? 'flat'}:${look.normalMap?.uuid ?? ''}`}
+        key={`${look.map?.uuid ?? 'flat'}:${look.normalMap?.uuid ?? ''}:${look.roughnessMap?.uuid ?? ''}`}
         color={look.color}
         map={look.map}
         normalMap={look.normalMap}
         normalScale={look.normalScale}
+        roughnessMap={look.roughnessMap}
         roughness={look.roughness}
         metalness={look.metalness}
       />
