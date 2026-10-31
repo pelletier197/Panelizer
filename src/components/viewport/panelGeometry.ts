@@ -1,7 +1,8 @@
-import { ExtrudeGeometry, Matrix4, Shape, Vector2, Vector3, type BufferGeometry } from 'three'
+import { BoxGeometry, ExtrudeGeometry, Matrix4, Shape, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { Panel } from '../../types/panel'
-import { MM_TO_M, axisField } from '../../lib/geometry'
+import { MM_TO_M, axisField, panelBoxSize, toMetres } from '../../lib/geometry'
 import { cornerRadii, hasRounding, roundedOutline } from '../../lib/rounding'
+import { applyPanelUVs } from './finishLook'
 
 type ShapeFields = Pick<Panel, 'length' | 'width' | 'thickness' | 'normal' | 'corners'>
 
@@ -37,5 +38,16 @@ export function roundedPanelGeometry(panel: ShapeFields): BufferGeometry | null 
   const w = unit(axisOf(panel.normal, 'thickness'))
   if (u.clone().cross(v).dot(w) < 0) w.negate()
   geometry.applyMatrix4(new Matrix4().makeBasis(u, v, w))
+  return geometry
+}
+
+/**
+ * The mesh geometry for any panel: the plain box, or the rounded outline when
+ * it has rounded corners, with texture coordinates in metres that follow its
+ * grain (see `applyPanelUVs`), so finishes lie the right way.
+ */
+export function panelGeometry(panel: ShapeFields & Pick<Panel, 'id' | 'grain'>): BufferGeometry {
+  const geometry = roundedPanelGeometry(panel) ?? new BoxGeometry(...toMetres(panelBoxSize(panel as Panel)))
+  applyPanelUVs(geometry, panel)
   return geometry
 }

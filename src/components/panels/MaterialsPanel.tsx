@@ -1,14 +1,16 @@
-import { MATERIAL_COLORS } from '../../lib/materials'
 import { useDesignStore } from '../../store/designStore'
 import { Menu } from '../ui/Menu'
 import { Button } from '../ui/Button'
 import { CONTROL } from '../ui/Field'
 import { Section } from '../ui/Panel'
-import { cx } from '../ui/cx'
+import { finishInfo, variantOf } from '../../lib/finishes'
+import { MaterialPicker } from './MaterialPicker'
+import { swatchStyle } from '../ui/swatchStyle'
 
-/** Editor for the design's material list. A material is just a name and a
- *  colour; thickness is set per panel. Each material is one compact row:
- *  a colour-picker dropdown, the name, and a remove button. */
+/** Editor for the design's material list. A material is a name and a look —
+ *  a finish and a colour; thickness is set per panel. Each material is one
+ *  compact row: its swatch (opening the picker), the name, and a remove
+ *  button. */
 export function MaterialsPanel() {
   const materials = useDesignStore((s) => s.materials)
   const addMaterial = useDesignStore((s) => s.addMaterial)
@@ -28,34 +30,10 @@ export function MaterialsPanel() {
         {materials.map((m) => (
           <div className="flex items-center gap-1.5" key={m.id}>
             <Menu
-              ariaLabel="Material colour"
-              label={
-                <span
-                  className="block size-4 rounded-xs border border-black/30"
-                  style={{ background: m.color }}
-                />
-              }
+              ariaLabel={`${m.name} look: ${describe(m)}`}
+              label={<span className="block size-4 rounded-xs border border-black/30" style={swatchStyle(m)} />}
             >
-              {(close) => (
-                <div className="grid grid-cols-4 gap-1 p-1">
-                  {MATERIAL_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      className={cx(
-                        'size-6 cursor-pointer rounded-xs border-2',
-                        m.color === c ? 'border-ink' : 'border-transparent hover:border-edge-strong',
-                      )}
-                      style={{ background: c }}
-                      aria-label={c}
-                      onClick={() => {
-                        updateMaterial(m.id, { color: c })
-                        close()
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+              {() => <MaterialPicker material={m} onChange={(patch) => updateMaterial(m.id, patch)} />}
             </Menu>
 
             <input
@@ -79,4 +57,9 @@ export function MaterialsPanel() {
       </div>
     </Section>
   )
+}
+
+/** A material's look in words: "Oak", "Marble", or "Paint". */
+function describe(m: { finish?: Parameters<typeof finishInfo>[0]; variant?: string }): string {
+  return variantOf(m.finish, m.variant)?.label ?? finishInfo(m.finish).label
 }
