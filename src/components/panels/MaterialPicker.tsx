@@ -1,36 +1,36 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { cssHsl, hexToHsl, hslToHex, type Hsl } from '../../lib/color'
 import { FINISHES, finishInfo, isHexColor, variantOf, type Finish } from '../../lib/finishes'
 import type { Material } from '../../lib/materials'
-import { usePersistentState } from '../../hooks/usePersistentState'
 import { MenuChoices, MenuLabel } from '../ui/Menu'
 import { cx } from '../ui/cx'
 import { swatchStyle } from '../ui/swatchStyle'
 import { usePhotos } from '../viewport/photos'
 
-/** Custom colours picked lately, offered again; a UI preference, not part of
- *  any design. */
-const RECENT_KEY = 'panelizer.ui.recentColors'
-const RECENT_MAX = 8
-const reviveRecent = (stored: unknown): string[] | null =>
-  Array.isArray(stored) ? stored.filter(isHexColor).slice(0, RECENT_MAX) : null
-
 /**
  * How a material looks, chosen the way you'd choose it in a shop: a finish,
  * the wood or stone within it, then a colour — a stain over wood, a paint
  * colour, a tone of stone or metal. The colours offered are ones furniture is
- * commonly finished in; any other can be picked too, and recent ones are
- * kept handy.
+ * commonly finished in; any other can be dialled in by hue, saturation and
+ * lightness — the way finishes are told apart (a warmer white, a greyer
+ * green, a deeper navy) — and recent ones are kept handy.
  */
 export function MaterialPicker({
   material,
   onChange,
+  recent,
+  remember,
 }: {
   material: Material
   onChange: (patch: Partial<Material>) => void
+  /** Custom colours picked lately, newest first. */
+  recent: string[]
+  /** Add a custom colour to them. Kept by the caller, which outlives the
+   *  picker: the picker hands its colour over as it closes. */
+  remember: (color: string) => void
 }) {
   const info = finishInfo(material.finish)
   const variant = variantOf(material.finish, material.variant)
-  const [recent, setRecent] = usePersistentState<string[]>(RECENT_KEY, [], reviveRecent)
   usePhotos() // swatches show the finish photo once it arrives
 
   const look = (color: string) => ({ color, finish: material.finish, variant: variant?.id })
@@ -46,10 +46,20 @@ export function MaterialPicker({
     )
   }
 
-  const pickCustom = (color: string) => {
-    onChange({ color })
-    setRecent((list) => [color, ...list.filter((c) => c !== color)].slice(0, RECENT_MAX))
-  }
+  // A custom colour settled on joins the recent ones when the picker closes —
+  // not every step of a slider along the way.
+  const offered = new Set([...info.palette.map((p) => p.color), ...(variant ? [variant.natural] : [])])
+  const settled = useRef({ start: material.color, color: material.color, offered, remember })
+  settled.current.color = material.color
+  settled.current.offered = offered
+  settled.current.remember = remember
+  useEffect(
+    () => () => {
+      const { start, color, offered, remember } = settled.current
+      if (color !== start && !offered.has(color.toLowerCase())) remember(color)
+    },
+    [],
+  )
 
   return (
     <div className="flex w-72 flex-col pb-2">
@@ -101,22 +111,8 @@ export function MaterialPicker({
       </div>
 
       <MenuLabel>Custom</MenuLabel>
-      <div className="mx-3 flex flex-wrap items-center gap-1">
-        <label
-          className="relative flex h-7 cursor-pointer items-center gap-1.5 rounded border border-edge px-2 text-xs text-ink-dim hover:border-edge-strong hover:text-ink"
-          title="Pick any colour"
-        >
-          <span className="size-3.5 rounded-xs border border-black/30" style={{ background: material.color }} />
-          {material.color.toUpperCase()}
-          <input
-            type="color"
-            className="absolute inset-0 cursor-pointer opacity-0"
-            value={material.color}
-            // The native picker fires as the colour is dragged; keep the last.
-            onChange={(e) => onChange({ color: e.target.value })}
-            onBlur={(e) => pickCustom(e.target.value)}
-          />
-        </label>
+      <HslPicker color={material.color} preview={swatchStyle(look(material.color))} onChange={(color) => onChange({ color })} />
+      <div className="mx-3 mt-2 flex flex-wrap items-center gap-1">
         {recent.map((c) => (
           <ColorChip
             key={c}
@@ -155,5 +151,109 @@ function ColorChip({
       style={style}
       onClick={onClick}
     />
+  )
+}
+
+/**
+ * A colour by hue, saturation and lightness: a slider each, its track showing
+ * where it leads from the current colour, a hex field, and a preview of the
+ * finish in it. Keeps its own hue while a colour is grey, where the hex alone
+ * would lose it, so sliding saturation back up returns to the same hue.
+ */
+function HslPicker({
+  color,
+  preview,
+  onChange,
+}: {
+  color: string
+  preview: CSSProperties
+  onChange: (color: string) => void
+}) {
+  const [hsl, setHsl] = useState<Hsl>(() => hexToHsl(color))
+  const [draft, setDraft] = useState(color.toUpperCase())
+  // Follow a colour set elsewhere (a palette chip), unless it's the one these
+  // sliders just produced.
+  useEffect(() => {
+    setHsl((current) => (hslToHex(current) === color.toLowerCase() ? current : hexToHsl(color)))
+    setDraft(color.toUpperCase())
+  }, [color])
+
+  const set = (patch: Partial<Hsl>) => {
+    const next = { ...hsl, ...patch }
+    setHsl(next)
+    onChange(hslToHex(next))
+  }
+
+  const sliders: { key: keyof Hsl; label: string; max: number; unit: string; track: string }[] = [
+    {
+      key: 'h',
+      label: 'Hue',
+      max: 359,
+      unit: '°',
+      track: `linear-gradient(to right, ${[0, 60, 120, 180, 240, 300, 360].map((h) => cssHsl({ ...hsl, h, s: Math.max(hsl.s, 35), l: 50 })).join(', ')})`,
+    },
+    {
+      key: 's',
+      label: 'Saturation',
+      max: 100,
+      unit: '%',
+      track: `linear-gradient(to right, ${cssHsl({ ...hsl, s: 0 })}, ${cssHsl({ ...hsl, s: 100 })})`,
+    },
+    {
+      key: 'l',
+      label: 'Lightness',
+      max: 100,
+      unit: '%',
+      track: `linear-gradient(to right, #000, ${cssHsl({ ...hsl, l: 50 })}, #fff)`,
+    },
+  ]
+
+  return (
+    <div className="mx-3 flex flex-col gap-1.5">
+      {sliders.map(({ key, label, max, unit, track }) => (
+        <label key={key} className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-2 text-xs text-ink-dim">
+          {label}
+          <input
+            type="range"
+            min={0}
+            max={max}
+            step={1}
+            value={Math.round(hsl[key])}
+            aria-label={label}
+            onChange={(e) => set({ [key]: Number(e.target.value) })}
+            className={cx(
+              'h-3 w-full cursor-pointer appearance-none rounded-full border border-black/30',
+              '[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full',
+              '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-transparent',
+              '[&::-webkit-slider-thumb]:shadow-[0_0_0_1px_rgb(0_0_0/0.6)]',
+              '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2',
+              '[&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-transparent',
+            )}
+            style={{ background: track }}
+          />
+          <span className="text-right tabular-nums">
+            {Math.round(hsl[key])}
+            {unit}
+          </span>
+        </label>
+      ))}
+      <div className="flex items-center gap-2">
+        <span className="h-7 flex-1 rounded-xs border border-black/30" style={preview} aria-hidden />
+        <input
+          type="text"
+          aria-label="Hex colour"
+          className="h-7 w-24 rounded border border-edge bg-bg px-2 font-mono text-xs text-ink uppercase focus:border-accent focus:outline-none"
+          value={draft}
+          maxLength={7}
+          onChange={(e) => {
+            const value = e.target.value.trim()
+            setDraft(value.toUpperCase())
+            const hex = (value.startsWith('#') ? value : `#${value}`).toLowerCase()
+            if (isHexColor(hex)) onChange(hex)
+          }}
+          onBlur={() => setDraft(color.toUpperCase())}
+        />
+      </div>
+    </div>
   )
 }

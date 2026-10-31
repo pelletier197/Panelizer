@@ -7,6 +7,15 @@ import { finishInfo, variantOf } from '../../lib/finishes'
 import { MaterialPicker } from './MaterialPicker'
 import { swatchStyle } from '../ui/swatchStyle'
 import { usePhotos } from '../viewport/photos'
+import { usePersistentState } from '../../hooks/usePersistentState'
+import { isHexColor } from '../../lib/finishes'
+
+/** Custom colours picked lately, offered again in the picker; a UI
+ *  preference, not part of any design. */
+const RECENT_KEY = 'panelizer.ui.recentColors'
+const RECENT_MAX = 8
+const reviveRecent = (stored: unknown): string[] | null =>
+  Array.isArray(stored) ? stored.filter(isHexColor).slice(0, RECENT_MAX) : null
 
 /** Editor for the design's material list. A material is a name and a look —
  *  a finish and a colour; thickness is set per panel. Each material is one
@@ -18,6 +27,9 @@ export function MaterialsPanel() {
   const updateMaterial = useDesignStore((s) => s.updateMaterial)
   const removeMaterial = useDesignStore((s) => s.removeMaterial)
   usePhotos() // swatches show the finish photo once it arrives
+  const [recent, setRecent] = usePersistentState<string[]>(RECENT_KEY, [], reviveRecent)
+  const remember = (color: string) =>
+    setRecent((list) => [color, ...list.filter((c) => c !== color)].slice(0, RECENT_MAX))
 
   return (
     <Section
@@ -35,7 +47,14 @@ export function MaterialsPanel() {
               ariaLabel={`${m.name} look: ${describe(m)}`}
               label={<span className="block size-4 rounded-xs border border-black/30" style={swatchStyle(m)} />}
             >
-              {() => <MaterialPicker material={m} onChange={(patch) => updateMaterial(m.id, patch)} />}
+              {() => (
+                <MaterialPicker
+                  material={m}
+                  onChange={(patch) => updateMaterial(m.id, patch)}
+                  recent={recent}
+                  remember={remember}
+                />
+              )}
             </Menu>
 
             <input
