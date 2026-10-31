@@ -3,6 +3,7 @@ import { PropertiesPanel } from './components/panels/PropertiesPanel'
 import { MaterialsPanel } from './components/panels/MaterialsPanel'
 import { PartsPanel } from './components/panels/PartsPanel'
 import { CutlistModal } from './components/panels/CutlistModal'
+import { PresentView } from './components/present/PresentView'
 import { Viewport } from './components/viewport/Viewport'
 import { GestureReadout } from './components/viewport/GestureReadout'
 import { ViewportHint } from './components/viewport/ViewportHint'
@@ -49,6 +50,7 @@ export default function App() {
         </Side>
       </main>
       <CutlistModal />
+      <PresentView />
       <ConfirmHost />
     </div>
   )

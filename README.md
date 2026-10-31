@@ -56,6 +56,9 @@ Every panel becomes a manufacturing part automatically. Get a clean, real-time l
 
 *The result? A visual cut diagram that's actually useful at the saw — or the router.*
 
+### 🎨 Finishes & Presentation
+Give each material a finish — paint, wood (maple, oak, walnut…), stone (marble, granite…) or metal — and stain it any colour, from palettes of popular furniture finishes or your own. Wood grain follows each part's grain direction. Hit **Present** to see the piece under soft studio light, jump between preset angles, and save the view as an image to show your client.
+
 ### 🔒 100% Local & Private
 Everything runs locally in your browser. **No accounts, no cloud, no server, no uploads, no limit.** Projects save directly to your machine as a simple JSON file you can reopen anytime, anywhere.
 

@@ -56,6 +56,7 @@ export function Toolbar() {
   const precision = useDesignStore((s) => s.precision)
   const setPrecision = useDesignStore((s) => s.setPrecision)
   const setCutlistOpen = useDesignStore((s) => s.setCutlistOpen)
+  const setPresentOpen = useDesignStore((s) => s.setPresentOpen)
   const tool = useDesignStore((s) => s.tool)
   const setTool = useDesignStore((s) => s.setTool)
   const addPanel = useDesignStore((s) => s.addPanel)
@@ -221,6 +222,16 @@ export function Toolbar() {
         {/* Cutlist and the document menu are one cluster — the divider marks
             them as different kinds of control without pushing them apart. */}
         <div className="flex items-center gap-2">
+          {/* On a phone it moves into the menu, to leave the toolbar room. */}
+          <span className="hidden md:contents">
+            <Button
+              disabled={empty}
+              title="See it as built — real finishes, studio light — and save it as an image"
+              onClick={() => setPresentOpen(true)}
+            >
+              Present
+            </Button>
+          </span>
           <Button variant="primary" disabled={empty} onClick={() => setCutlistOpen(true)}>
             Cutlist
           </Button>
@@ -249,6 +260,17 @@ export function Toolbar() {
 
               {DIVIDER}
 
+              <div className="flex flex-col md:hidden">
+                <MenuItem
+                  disabled={empty}
+                  onClick={() => {
+                    close()
+                    setPresentOpen(true)
+                  }}
+                >
+                  Present…
+                </MenuItem>
+              </div>
               <MenuItem disabled={empty} onClick={() => void share(close)}>
                 Share link…
               </MenuItem>

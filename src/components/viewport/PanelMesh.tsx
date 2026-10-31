@@ -2,14 +2,16 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { Mesh } from 'three'
 import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
-import { MM_TO_M, panelBoxSize, toMetres } from '../../lib/geometry'
+import { MM_TO_M, toMetres } from '../../lib/geometry'
 import { findMaterial } from '../../lib/materials'
 import { roundToUnitGrid } from '../../lib/units'
 import { SNAP_THRESHOLD_MM, snapGroupDelta, snapHintFromTarget } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
 import { ResizeHandles } from './ResizeHandles'
 import { palette } from './palette'
-import { roundedPanelGeometry } from './panelGeometry'
+import { panelGeometry } from './panelGeometry'
+import { lookOf } from './finishLook'
+import { usePhotos } from './photos'
 import { useGesture, type GestureSpec } from './useGesture'
 import { useCompact } from '../../hooks/useMedia'
 
@@ -60,7 +62,9 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   const tool = useDesignStore((s) => s.tool)
   const unit = useDesignStore((s) => s.unit)
   const precision = useDesignStore((s) => s.precision)
-  const color = useDesignStore((s) => findMaterial(s.materials, panel.materialId).color)
+  const material = useDesignStore((s) => findMaterial(s.materials, panel.materialId))
+  usePhotos() // re-render when the finish's photo arrives
+  const look = lookOf(material)
 
   const paint = palette()
   const gesture = useGesture()
@@ -76,25 +80,25 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   // a readout gesture has been opened this drag.
   const axisRef = useRef<0 | 1 | 2 | null>(null)
 
-  const size = toMetres(panelBoxSize(panel))
-
   // Rounded corners need a real outline; square panels keep the plain box.
-  // Rebuilt only when the shape changes — not on every move, which only
-  // changes the position.
-  const { length, width, thickness, normal } = panel
+  // Rebuilt only when the shape or grain changes — not on every move, which
+  // only changes the position.
+  const { id, length, width, thickness, normal, grain } = panel
   const cornersKey = panel.corners?.join(',') ?? ''
-  const rounded = useMemo(
+  const geometry = useMemo(
     () =>
-      roundedPanelGeometry({
+      panelGeometry({
+        id,
         length,
         width,
         thickness,
         normal,
+        grain,
         corners: cornersKey ? (cornersKey.split(',').map(Number) as Panel['corners']) : undefined,
       }),
-    [length, width, thickness, normal, cornersKey],
+    [id, length, width, thickness, normal, grain, cornersKey],
   )
-  useEffect(() => () => rounded?.dispose(), [rounded])
+  useEffect(() => () => geometry.dispose(), [geometry])
   const position = toMetres(panel.position)
 
   const selectedNow = () => {
@@ -266,15 +270,21 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
               }
         }
       >
-        {rounded ? <primitive object={rounded} attach="geometry" /> : <boxGeometry args={size} />}
+        <primitive object={geometry} attach="geometry" />
         {/* A hidden panel is a faint light-grey ghost: a barely-there transparent
             fill so its shape still reads, but you can see straight through it.
             The `key` forces a fresh material when visibility flips — toggling
             `transparent` on an existing material doesn't reliably take, leaving
-            it rendering opaque. */}
+            it rendering opaque — or when a texture comes or goes, which needs
+            its shader rebuilt. */}
         <meshStandardMaterial
-          key={hidden ? 'ghost' : 'solid'}
-          color={hidden ? paint.ghost : color}
+          key={hidden ? 'ghost' : `${look.map?.uuid ?? 'flat'}:${look.normalMap?.uuid ?? ''}`}
+          color={hidden ? paint.ghost : look.color}
+          map={hidden ? null : look.map}
+          normalMap={hidden ? null : look.normalMap}
+          normalScale={look.normalScale}
+          roughness={look.roughness}
+          metalness={hidden ? 0 : look.metalness}
           transparent={hidden}
           opacity={hidden ? 0.2 : 1}
           depthWrite={!hidden}

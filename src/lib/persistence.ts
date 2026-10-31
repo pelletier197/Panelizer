@@ -4,7 +4,7 @@ import type { Material } from './materials'
 import type { Stock } from './stock'
 import type { Unit } from './units'
 import { DEFAULT_PRECISION } from './units'
-import { defaultMaterials, findMaterial } from './materials'
+import { defaultMaterials, findMaterial, sanitizeMaterial } from './materials'
 import { DEFAULT_CUT_STYLE, type CutStyle } from './nesting'
 
 const FORMAT = 'panelizer'
@@ -80,10 +80,12 @@ export function parse(json: string): Design {
     throw new Error('This file is not a valid Panelizer design.')
   }
 
-  const materials =
-    Array.isArray(data.materials) && data.materials.length > 0
-      ? data.materials
-      : defaultMaterials()
+  // Materials come from untrusted input too: keep the usable ones, each with a
+  // real colour and a finish we know (older files have none: paint).
+  const read = Array.isArray(data.materials)
+    ? data.materials.map(sanitizeMaterial).filter((m): m is Material => m !== null)
+    : []
+  const materials = read.length > 0 ? read : defaultMaterials()
 
   const panels = data.panels.filter(isUsablePanel).map((p) => {
     const panel: Panel = {

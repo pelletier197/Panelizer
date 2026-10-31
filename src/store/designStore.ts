@@ -152,6 +152,9 @@ interface DesignState extends Design {
   /** Whether the full-screen cutlist view is open. Transient UI state. */
   cutlistOpen: boolean
   setCutlistOpen: (open: boolean) => void
+  /** Whether the full-screen presentation view is open. Transient UI state. */
+  presentOpen: boolean
+  setPresentOpen: (open: boolean) => void
   setTool: (tool: Tool) => void
   setToolPick: (pick: ToolPick | null) => void
   setMeasurement: (m: { a: Point; b: Point } | null) => void
@@ -369,10 +372,12 @@ const createDesignStore = () => create<DesignState>((set, get) => {
     dragOrigin: null,
     suppressSelect: false,
     cutlistOpen: false,
+    presentOpen: false,
     clipboard: [],
     pasteCount: 0,
 
     setCutlistOpen: (cutlistOpen) => set({ cutlistOpen }),
+    setPresentOpen: (presentOpen) => set({ presentOpen }),
 
     // Switching tools clears any in-progress pick and the shown measurement,
     // and always restores orbit (in case a drag was interrupted).

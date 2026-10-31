@@ -213,3 +213,37 @@ describe('corner radii', () => {
     }
   })
 })
+
+describe('parse — materials', () => {
+  const withMaterials = (materials: unknown[]) => JSON.stringify({ panels: [], materials })
+
+  it('loads a material without a finish as paint, as older files have it', () => {
+    const [m] = parse(withMaterials([{ id: 'a', name: 'Ply', color: '#d9b380' }])).materials
+    expect(m).toEqual({ id: 'a', name: 'Ply', color: '#d9b380' })
+  })
+
+  it('keeps a known finish and variant', () => {
+    const [m] = parse(withMaterials([{ id: 'a', name: 'Oak', color: '#c9a46c', finish: 'wood', variant: 'oak' }])).materials
+    expect(m).toMatchObject({ finish: 'wood', variant: 'oak' })
+  })
+
+  it("falls back to the finish's first variant for an unknown one, and to paint for an unknown finish", () => {
+    const [wood, unknown] = parse(
+      withMaterials([
+        { id: 'a', name: 'A', color: '#c9a46c', finish: 'wood', variant: 'teak' },
+        { id: 'b', name: 'B', color: '#c9a46c', finish: 'velvet', variant: 'red' },
+      ]),
+    ).materials
+    expect(wood).toMatchObject({ finish: 'wood', variant: 'maple' })
+    expect(unknown.finish).toBeUndefined()
+    expect(unknown.variant).toBeUndefined()
+  })
+
+  it('replaces a colour that is not #rrggbb, and drops materials without an id', () => {
+    const materials = parse(
+      withMaterials([{ id: 'a', name: 'A', color: 'red;background:url(x)' }, { name: 'no id', color: '#ffffff' }, null]),
+    ).materials
+    expect(materials).toHaveLength(1)
+    expect(materials[0].color).toMatch(/^#[0-9a-f]{6}$/i)
+  })
+})
