@@ -13,6 +13,7 @@ import { Hint, Section } from '../ui/Panel'
 import { Kbd } from '../ui/Kbd'
 import { cx } from '../ui/cx'
 import { KEYS } from '../ui/keys'
+import { useTouch } from '../../hooks/useMedia'
 
 type CornerIndex = 0 | 1 | 2 | 3
 
@@ -167,6 +168,7 @@ export function PropertiesPanel() {
     useShallow((s) => s.panels.filter((p) => s.selectedIds.includes(p.id))),
   )
   const materials = useDesignStore((s) => s.materials)
+  const touch = useTouch()
   const unit = useDesignStore((s) => s.unit)
   const precision = useDesignStore((s) => s.precision)
   const updatePanels = useDesignStore((s) => s.updatePanels)
@@ -201,8 +203,9 @@ export function PropertiesPanel() {
     return (
       <Section title="Panel">
         <Hint>
-          Select a panel to edit its dimensions, material, and position. Shift+click or Shift+drag a box
-          to select several, Ctrl+A for all.
+          {touch
+            ? 'Tap a panel in the model to see its size, material, and position.'
+            : 'Select a panel to edit its dimensions, material, and position. Shift+click or Shift+drag a box to select several, Ctrl+A for all.'}
         </Hint>
       </Section>
     )

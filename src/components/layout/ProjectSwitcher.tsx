@@ -54,7 +54,7 @@ export function ProjectSwitcher() {
   }
 
   return (
-    <div className="mr-4 flex items-center gap-0.5">
+    <div className="mr-2 flex min-w-0 items-center gap-0.5 md:mr-4">
       <NameField value={name} onChange={setName} />
 
       <Menu label={<ChevronDown />} ariaLabel="Projects" variant="ghost">
@@ -164,7 +164,7 @@ function NameField({ value, onChange }: { value: string; onChange: (name: string
       aria-label="Project name"
       title="Rename project"
       className={cx(
-        'w-44 truncate rounded border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-ink',
+        'w-28 min-w-0 truncate rounded border md:w-44 border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-ink',
         'transition-colors hover:border-edge focus:border-accent focus:bg-bg focus:outline-none',
       )}
       value={draft}

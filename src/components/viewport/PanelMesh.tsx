@@ -11,6 +11,7 @@ import { ResizeHandles } from './ResizeHandles'
 import { palette } from './palette'
 import { roundedPanelGeometry } from './panelGeometry'
 import { useGesture, type GestureSpec } from './useGesture'
+import { useCompact } from '../../hooks/useMedia'
 
 type Vec3 = [number, number, number]
 
@@ -63,6 +64,9 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
 
   const paint = palette()
   const gesture = useGesture()
+  // On a phone the model is for looking at and measuring: a finger meant to
+  // orbit would too easily grab a gizmo and move the part instead.
+  const compact = useCompact()
   const hidden = panel.hidden === true
 
   // Positions of every selected panel frozen at pointer-down, so the whole
@@ -283,7 +287,7 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
         />
       </mesh>
 
-      {!hidden && selected && isPrimary && tool === 'move' && (
+      {!hidden && selected && isPrimary && tool === 'move' && !compact && (
         <TransformControls
           object={meshRef}
           mode="translate"
@@ -296,7 +300,7 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
 
       {/* Like the move gizmo, the primary carries the resize handles for the
           whole selection. */}
-      {!hidden && selected && isPrimary && tool === 'resize' && <ResizeHandles panel={panel} />}
+      {!hidden && selected && isPrimary && tool === 'resize' && !compact && <ResizeHandles panel={panel} />}
     </>
   )
 })

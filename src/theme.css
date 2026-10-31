@@ -103,6 +103,16 @@
     background: var(--color-bg);
   }
 
+  /* iOS zooms the page into any field under 16px when it's focused, and won't
+     zoom back out; on a touch screen fields are set at 16px instead. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
   /* Numbers everywhere line up in columns. */
   input[type='text'],
   input[type='number'] {

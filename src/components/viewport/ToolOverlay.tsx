@@ -7,8 +7,11 @@ import { distance, panelCorners, type Point } from '../../lib/corners'
 import { formatMeasurement } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 import { palette } from './palette'
+import { useTouch } from '../../hooks/useMedia'
 
 const HIT_RADIUS = 0.03 // invisible click target (m)
+/** A fingertip is broader than a pointer: a bigger target on a touch screen. */
+const TOUCH_HIT_RADIUS = 0.05
 const DOT_RADIUS = 0.004 // visible dot (m); grows on hover / selection
 /** Distance (m) at which a dot renders at its base size; it scales linearly with
  *  camera distance so it keeps a constant on-screen size at any zoom. */
@@ -37,6 +40,7 @@ function Corner({
 }) {
   const ref = useRef<Group>(null!)
   const pos = new Vector3(...toMetres(world))
+  const touch = useTouch()
   const paint = palette()
 
   useFrame(({ camera }) => {
@@ -68,7 +72,7 @@ function Corner({
           if (!occluded(e)) onPick()
         }}
       >
-        <sphereGeometry args={[HIT_RADIUS, 8, 8]} />
+        <sphereGeometry args={[touch ? TOUCH_HIT_RADIUS : HIT_RADIUS, 8, 8]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       {/* depthTest on: a corner hidden behind a panel is not drawn, so only the

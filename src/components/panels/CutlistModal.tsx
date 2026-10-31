@@ -9,9 +9,11 @@ import { Button } from '../ui/Button'
 import { Kbd } from '../ui/Kbd'
 import { Menu, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
 import { Swatch } from '../ui/Panel'
+import { cx } from '../ui/cx'
 import { formatKeys, KEYS } from '../ui/keys'
 import { useDragResize } from '../../hooks/useDragResize'
 import { usePersistentState } from '../../hooks/usePersistentState'
+import { useCompact } from '../../hooks/useMedia'
 import { CutResult } from './cutlist/CutResult'
 import { GrainEditor } from './cutlist/GrainEditor'
 import { StockList } from './cutlist/StockList'
@@ -52,6 +54,10 @@ export function CutlistModal() {
   const [hovered, setHovered] = useState<string[] | null>(null)
   // Sheets the Export item being pointed at would export, outlined.
   const [exportPreview, setExportPreview] = useState<string[] | null>(null)
+  // On a phone the controls fold away above the sheets, which get the screen.
+  const compact = useCompact()
+  const [controlsOpen, setControlsOpen] = useState(false)
+  const stockCount = useDesignStore((s) => s.stocks.length)
 
   useEscapeToClose(open, () => setOpen(false))
 
@@ -72,14 +78,14 @@ export function CutlistModal() {
   return (
     <div
       data-print-root
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 print:static print:block print:bg-white print:p-0"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 md:p-6 print:static print:block print:bg-white print:p-0"
       onClick={() => setOpen(false)}
     >
       <div
-        className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-edge bg-bg shadow-2xl print:h-auto print:border-0 print:shadow-none"
+        className="flex h-full w-full flex-col overflow-hidden border-edge bg-bg shadow-2xl md:rounded-lg md:border print:h-auto print:border-0 print:shadow-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex h-13 shrink-0 items-center gap-4 border-b border-edge bg-surface px-4 print:hidden">
+        <header className="flex h-13 shrink-0 items-center gap-3 border-b border-edge bg-surface px-3 md:gap-4 md:px-4 print:hidden">
           <h2 className="m-0 flex-1 text-base font-semibold">Cutlist</h2>
           <ExportMenu result={model.result} pending={model.pending} onPreview={setExportPreview} />
           {/* Close is fenced off behind a divider so it can't be fat-fingered
@@ -90,11 +96,31 @@ export function CutlistModal() {
           </Button>
         </header>
 
-        <div className="flex min-h-0 flex-1 print:block">
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row print:block">
+          {compact && (
+            <button
+              type="button"
+              aria-expanded={controlsOpen}
+              className="flex shrink-0 cursor-pointer items-center justify-between border-0 border-b border-edge bg-surface px-4 py-2.5 text-sm text-ink print:hidden"
+              onClick={() => setControlsOpen((o) => !o)}
+            >
+              <span>
+                Settings &amp; sheet goods
+                <span className="ml-2 text-xs text-ink-dim">
+                  {stockCount} sheet good{stockCount === 1 ? '' : 's'}
+                </span>
+              </span>
+              <span className="text-xs text-ink-dim">{controlsOpen ? 'Hide ▴' : 'Show ▾'}</span>
+            </button>
+          )}
           <aside
-            className="flex shrink-0 flex-col overflow-y-auto bg-surface print:hidden"
+            className={cx(
+              'flex shrink-0 flex-col overflow-y-auto bg-surface print:hidden',
+              compact && 'max-h-[50dvh] border-b border-edge',
+              compact && !controlsOpen && 'hidden',
+            )}
             ref={asideRef}
-            style={{ width: controlsWidth }}
+            style={compact ? undefined : { width: controlsWidth }}
           >
             <StockList unit={unit} precision={precision} />
             <GrainEditor
@@ -108,7 +134,7 @@ export function CutlistModal() {
           </aside>
 
           <div
-            className="w-1 shrink-0 cursor-col-resize bg-edge transition-colors hover:bg-accent print:hidden"
+            className="hidden w-1 shrink-0 cursor-col-resize bg-edge transition-colors hover:bg-accent md:block print:hidden"
             role="separator"
             aria-orientation="vertical"
             onMouseDown={startResize}
