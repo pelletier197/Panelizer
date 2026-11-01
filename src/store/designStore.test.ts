@@ -291,6 +291,19 @@ describe('projects', () => {
     expect(listProjects().map((p) => p.id)).not.toContain(second)
   })
 
+  it('replacing a project overwrites it in place and switches to it', () => {
+    const first = store().projectId
+    store().newProject()
+    const count = listProjects().length
+    store().replaceProject(first, { ...emptyDesign(), name: 'Shared', panels: [panel({ id: 'x' })] })
+    expect(store().projectId).toBe(first)
+    expect(store().name).toBe('Shared')
+    expect(store().panels.map((p) => p.id)).toEqual(['x'])
+    expect(store().past).toEqual([])
+    expect(listProjects()).toHaveLength(count)
+    expect(listProjects().find((p) => p.id === first)?.name).toBe('Shared')
+  })
+
   it('refuses to open a project that is gone', () => {
     expect(store().openProject('missing')).toBe(false)
   })

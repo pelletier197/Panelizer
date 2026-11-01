@@ -99,6 +99,14 @@ export function saveProject(id: string, design: Design, now = Date.now()): boole
   return true
 }
 
+/** Whether two project names are the same, ignoring case and stray spaces. */
+const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
+
+/** The most recently edited project called `name`, if there is one. */
+export function findProjectByName(name: string): ProjectEntry | undefined {
+  return listProjects().find((e) => sameName(e.name, name))
+}
+
 export function deleteProject(id: string): void {
   remove(projectKey(id))
   writeIndex(listProjects().filter((e) => e.id !== id))

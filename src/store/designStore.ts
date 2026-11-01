@@ -245,6 +245,9 @@ interface DesignState extends Design {
   /** Start a new project and switch to it — empty, keeping the current
    *  materials and settings, or holding `design` (an import, a shared link). */
   newProject: (design?: Design) => void
+  /** Overwrite a saved project with `design` (a newer copy from a shared link)
+   *  and switch to it. Undo history starts afresh. */
+  replaceProject: (id: string, design: Design) => void
   /** Delete a saved project; deleting the open one switches to the most recent
    *  other project, or a new one. */
   deleteProject: (id: string) => void
@@ -656,6 +659,11 @@ const createDesignStore = () => create<DesignState>((set, get) => {
       // Saved straight away so it's in the list even before its first edit.
       projects.saveProject(id, fresh)
       switchTo(id, fresh)
+    },
+
+    replaceProject: (id, design) => {
+      projects.saveProject(id, design)
+      switchTo(id, design)
     },
 
     deleteProject: (id) => {
