@@ -1,9 +1,8 @@
+import { lazy, Suspense, useState, type ReactNode } from 'react'
 import { Toolbar } from './components/panels/Toolbar'
 import { PropertiesPanel } from './components/panels/PropertiesPanel'
 import { MaterialsPanel } from './components/panels/MaterialsPanel'
 import { PartsPanel } from './components/panels/PartsPanel'
-import { CutlistModal } from './components/panels/CutlistModal'
-import { PresentView } from './components/present/PresentView'
 import { Viewport } from './components/viewport/Viewport'
 import { GestureReadout } from './components/viewport/GestureReadout'
 import { ViewportHint } from './components/viewport/ViewportHint'
@@ -16,6 +15,21 @@ import { useShortcuts } from './hooks/useShortcuts'
 import { useSharedLink } from './components/layout/useSharedLink'
 import { hasWebGL } from './lib/webgl'
 import { useCompact } from './hooks/useMedia'
+import { useDesignStore } from './store/designStore'
+
+// The cutlist and the presentation view are fetched the first time they're
+// opened, so the editor doesn't wait for them.
+const CutlistModal = lazy(() => import('./components/panels/CutlistModal').then((m) => ({ default: m.CutlistModal })))
+const PresentView = lazy(() => import('./components/present/PresentView').then((m) => ({ default: m.PresentView })))
+
+/** Renders `children` from the first time `open` is true, and keeps them
+ *  mounted after, so a view keeps its state (the cutlist its layout) when
+ *  closed and reopened. */
+function OnceOpened({ open, children }: { open: boolean; children: ReactNode }) {
+  const [opened, setOpened] = useState(open)
+  if (open && !opened) setOpened(true)
+  return opened ? <Suspense fallback={null}>{children}</Suspense> : null
+}
 
 export default function App() {
   useSharedLink()
@@ -24,6 +38,8 @@ export default function App() {
   // under it.
   const compact = useCompact()
   const Side = compact ? MobileDrawer : ResizableSidebar
+  const cutlistOpen = useDesignStore((s) => s.cutlistOpen)
+  const presentOpen = useDesignStore((s) => s.presentOpen)
 
   return (
     <div className="flex h-full flex-col">
@@ -49,8 +65,12 @@ export default function App() {
           <PartsPanel />
         </Side>
       </main>
-      <CutlistModal />
-      <PresentView />
+      <OnceOpened open={cutlistOpen}>
+        <CutlistModal />
+      </OnceOpened>
+      <OnceOpened open={presentOpen}>
+        <PresentView />
+      </OnceOpened>
       <ConfirmHost />
     </div>
   )

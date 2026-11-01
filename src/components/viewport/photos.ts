@@ -37,6 +37,13 @@ const photos = new Map<string, Photo | 'loading' | 'failed'>()
 const listeners = new Set<() => void>()
 let version = 0
 
+/** Tell `usePhotos` subscribers something changed: a photo started loading,
+ *  arrived, or failed. */
+function changed() {
+  version++
+  listeners.forEach((l) => l())
+}
+
 const url = (id: string, suffix: string) => `${import.meta.env.BASE_URL}textures/${id}-${suffix}.webp`
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -66,6 +73,9 @@ export function photoOf(variant: Variant, tier: Tier = 'view'): Photo | null {
   if (entry && entry !== 'loading' && entry !== 'failed') return entry
   if (!entry) {
     photos.set(key, 'loading')
+    // Usually asked for mid-render, where updating other components isn't
+    // allowed: say so (for `photosLoading`) once this render is done.
+    queueMicrotask(changed)
     const { metres, relief, gloss, turned } = variant.photo
     const files = FILES[tier]
     Promise.all([
@@ -83,12 +93,16 @@ export function photoOf(variant: Variant, tier: Tier = 'view'): Photo | null {
       })
       // Offline or missing: keep what's shown meanwhile.
       .catch(() => photos.set(key, 'failed'))
-      .finally(() => {
-        version++
-        listeners.forEach((l) => l())
-      })
+      .finally(changed)
   }
   return null
+}
+
+/** Whether any of a set's photos is still on its way. Read alongside
+ *  `usePhotos`, which re-renders when one arrives. */
+export function photosLoading(tier: Tier): boolean {
+  for (const [key, entry] of photos) if (entry === 'loading' && key.endsWith(`:${tier}`)) return true
+  return false
 }
 
 /** Re-render when a photo arrives. Returns a number that changes each time. */

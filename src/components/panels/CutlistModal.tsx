@@ -19,6 +19,7 @@ import { GrainEditor } from './cutlist/GrainEditor'
 import { StockList } from './cutlist/StockList'
 import { useCursorTooltip } from './cutlist/tooltip'
 import { sheetKey, useCutlistModel, useEscapeToClose, usePrintMode } from './cutlist/useCutlistModel'
+import { plural } from '../../lib/plural'
 
 /** Controls-panel width bounds + persisted UI preference. */
 const CONTROLS_MIN = 240
@@ -107,7 +108,7 @@ export function CutlistModal() {
               <span>
                 Settings &amp; sheet goods
                 <span className="ml-2 text-xs text-ink-dim">
-                  {stockCount} sheet good{stockCount === 1 ? '' : 's'}
+                  {plural(stockCount, 'sheet good')}
                 </span>
               </span>
               <span className="text-xs text-ink-dim">{controlsOpen ? 'Hide ▴' : 'Show ▾'}</span>

@@ -2,6 +2,7 @@ import { parse, type Design } from '../../lib/persistence'
 import { importProjects, parseBundle } from '../../lib/projects'
 import { useDesignStore } from '../../store/designStore'
 import { useConfirm } from '../ui/useConfirm'
+import { plural } from '../../lib/plural'
 
 /**
  * Import one or more files picked by the user. Each file may be a single
@@ -42,7 +43,7 @@ export function useImportFiles() {
 
     const imported = importProjects([...fromBundles, ...designs.map((design) => ({ design }))])
     await confirm({
-      title: imported > 0 ? `Imported ${imported} project${imported === 1 ? '' : 's'}` : 'Nothing imported',
+      title: imported > 0 ? `Imported ${plural(imported, 'project')}` : 'Nothing imported',
       body: (
         <>
           {imported > 0 && <p className="m-0">They're in the projects menu, next to the project name.</p>}

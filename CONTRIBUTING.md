@@ -42,6 +42,14 @@ src/
     snapping.ts           Magnetic move-snap + resize-face edge snap
     overlaps.ts           Where two panels interpenetrate (joint markers)
     resize.ts             Single-face resize math (opposite face fixed)
+  store/
+    designStore.ts        The one store, built from the slices below; autosave
+    history.ts            Undo / redo, and commit(): the way every edit lands
+    panelsSlice.ts        Add, change, remove, copy and paste panels
+    selectionSlice.ts     Selection and what the viewport lights up
+    toolsSlice.ts         Viewport tools, gesture readout, open views
+    documentSlice.ts      Materials, stock, units, cutlist settings, name
+    projectsSlice.ts      Open, new, replace and delete saved projects
 ```
 
 

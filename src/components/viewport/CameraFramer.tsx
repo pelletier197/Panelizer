@@ -4,7 +4,8 @@ import { useThree } from '@react-three/fiber'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M } from '../../lib/geometry'
 import { frameBounds, unionBounds } from '../../lib/framing'
-import { registerFramer } from './frameView'
+import { useDesignStore } from '../../store/designStore'
+import { frameView, registerFramer } from './frameView'
 
 /** How long the camera glides to its framed view (ms). */
 const GLIDE_MS = 250
@@ -14,6 +15,10 @@ const GLIDE_MS = 250
  * live, and serves `frameView` for the keymap. Moves both the orbit target and the camera, gliding between the two
  * views rather than jumping so the change of view is easy to follow. Renders
  * nothing.
+ *
+ * Also frames each project as it opens — at startup, and on switching,
+ * importing or following a link — so a design never opens off-screen at
+ * whatever angle the last one was left.
  */
 export function CameraFramer() {
   const camera = useThree((s) => s.camera)
@@ -52,6 +57,11 @@ export function CameraFramer() {
       unregister()
     }
   }, [camera, controls, invalidate])
+
+  const projectId = useDesignStore((s) => s.projectId)
+  useEffect(() => {
+    if (controls) frameView(useDesignStore.getState().panels)
+  }, [projectId, controls])
 
   return null
 }
