@@ -19,7 +19,7 @@
 
 ---
 
-Sketch a cabinet in 3D and walk into the shop with a cut diagram five minutes later. Panelizer is built for speed, not to replace full CAD — for parametric modeling, SketchUp or Fusion 360 are the right tools.
+From idea to cut sheet in minutes. Sketch your piece in 3D, and Panelizer works out every part and lays them out on your plywood sheets, ready for the saw or the CNC.
 
 ## ✨ What it does
 
