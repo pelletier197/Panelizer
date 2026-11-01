@@ -19,66 +19,25 @@
 
 ---
 
-## 💡 Why Panelizer?
+From idea to cut sheet in minutes. Sketch your piece in 3D, and Panelizer works out every part and lays them out on your plywood sheets, ready for the saw or the CNC.
 
-Designing shop furniture usually means juggling tools: you model in one app, export to another to get a part list, and hunt down a plugin for your cut layouts. **Panelizer folds all of that into one place.**
+## ✨ What it does
 
-> **Model, extract parts, and generate optimized cutlists — together, for free, directly in your browser.**
-
-It’s built for **speed and simplicity**, not to replace heavyweight CAD. 
-* **Need full parametric modeling?** SketchUp or Fusion 360 are the right tools.
-* **Want to sketch a cabinet and walk into the shop with a cut diagram 5 minutes later?** That’s Panelizer.
-
----
-
-
-## ✨ Features
-
-### 🛠️ Interactive 3D Editing
-* **Direct Manipulation:** Create, move, and resize plywood panels right in the 3D workspace.
-* **Smart Snapping:** Assembly-aware snapping ensures your joints line up perfectly.
-* **Error Prevention:** Visual overlap detection catches mistakes *before* you make a cut.
-* **Ultimate Flexibility:** Mix multiple materials and thicknesses in the exact same build.
-
-### 📐 Built for Real Woodworking
-Working in `18mm` plywood but thinking in `inches`? No problem. Pick your preferred unit for *anything*, mix and match freely, and Panelizer handles the conversions for you.
-
-### 📋 Automatic Parts List
-Every panel becomes a manufacturing part automatically. Get a clean, real-time list detailing **dimensions, material, thickness, and quantity**. When you're ready to order or build, hit export to generate a CSV.
-
-### 🪵 Smart Cutlist Generation
-*One of Panelizer's biggest strengths.* Tell it what sheet goods you have on hand, and its optimization engine handles the rest:
-- 🧩 **Nests parts** onto sheets to minimize waste.
-- 🌲 **Respects grain direction** for visible panels.
-- 🪚 **Accounts for kerf** and edge margins.
-- 🚨 **Flags missing stock** or insufficient sheets.
-- 🤖 **Exports each sheet as a DXF** for your CNC's CAM software, rounded corners as true arcs.
-
-*The result? A visual cut diagram that's actually useful at the saw — or the router.*
-
-### 🎨 Finishes & Presentation
-Give each material a finish — paint, wood (maple, oak, walnut…), stone (marble, granite…) or metal — and stain it any colour, from palettes of popular furniture finishes or your own. Wood grain follows each part's grain direction. Hit **Present** to see the piece under soft studio light, jump between preset angles, and save the view as an image to show your client.
-
-### 🔒 100% Local & Private
-Everything runs locally in your browser. **No accounts, no cloud, no server, no uploads, no limit.** Projects save directly to your machine as a simple JSON file you can reopen anytime, anywhere.
-
----
+- 🛠️ **Design in 3D.** Build your piece from panels: add sides, shelves and backs, then drag them into place. Parts snap together, and Panelizer warns you when two of them overlap.
+- 📐 **Work in your units.** Use millimetres, centimetres or inches. Inches show as fractions, like on a tape measure, and you can type math in any field, such as `23 3/4 + 1/2`.
+- 🪵 **Get a cutlist.** Tell Panelizer which sheets you have, and it lays your parts out on them with as little waste as possible. It respects the wood grain and the width of your saw blade. Print the layout for the saw, or export it as DXF for a CNC.
+- 🎨 **Show it off.** Give each material a finish, like oak, walnut, marble or painted, in any colour. Then open **Present** to see the piece as it will look built, and save a picture for your client.
+- 🔗 **Share it.** Send a link that holds the whole design. It opens on a phone too, so you can check sizes and the cutlist in the shop.
+- 🔒 **Keep it private.** Everything runs in your browser. There's no account, no server, and nothing is uploaded.
 
 ## 🤝 Contributing
 
-Issues and pull requests are always welcome! Whether you found a bug or have a brilliant feature idea, we'd love to hear from you.
-
-1. Check out the [Contributing Guide](CONTRIBUTING.md) for local setup instructions and project structure.
-2. [Open an issue](https://github.com/pelletier197/panelizer/issues) or submit a Pull Request.
-
----
+Issues and pull requests are welcome. See the [Contributing Guide](CONTRIBUTING.md) to get set up, or [open an issue](https://github.com/pelletier197/panelizer/issues).
 
 ## ☕ Support
 
-Panelizer is free and always will be. If it saved you a sheet of plywood (or an afternoon), you can [buy me a coffee](https://buymeacoffee.com/pelletier197).
-
----
+Panelizer is free and always will be. [Buy me a coffee](https://buymeacoffee.com/pelletier197) if you'd like to support it, and don't forget to [star the repo](https://github.com/pelletier197/Panelizer)!
 
 ## 📄 License
 
-Panelizer is open-source software released under the [MIT License](LICENSE).
+[MIT](LICENSE)

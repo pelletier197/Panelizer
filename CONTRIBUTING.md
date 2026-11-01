@@ -26,7 +26,7 @@ A second invariant, enforced everywhere: **the size you set is the size you cut*
 
 ### Units
 
-Storage is always millimetres — units are only about entry and display (`lib/units.ts`). A design has one default unit (mm / cm / inch, saved in the file), used for bare numbers and as the starting display unit. Any field accepts an explicit unit though — `24.5 in`, `3/4"`, `23 3/4`, `2.5cm`, `5 ft` — and remembers it, so you can have thickness in mm next to a width in inches. Inches display as shop-friendly fractions to the nearest 1/16".
+Storage is always millimetres — units are only about entry and display (`lib/units.ts`). A design works in one unit (mm / cm / inch, saved in the file): bare numbers are read in it and every field displays in it. A field accepts an explicit unit from the same system (`2.5cm` in a mm design) and simple arithmetic (`30+15+2-3`, `23 3/4 + 1/2`), but refuses the other system, so a value never silently becomes a lossy fraction. Sizes snap to the unit's grid — 1 mm, or the design's inch precision (1/16" by default) — and switching between metric and inches converts every part onto the new grid (`lib/repair.ts`).
 
 ### Project layout
 
@@ -62,13 +62,3 @@ Under the hood:
 - JSON persistence
 - Unit-aware value parser
 - Derived cutlist engine
-
-### Ideas for later
-
-- **Rotation.** Add a real rotation to `Panel` (beyond the discrete
-  thickness-axis) plus a rotate gizmo, with **snapping like move and resize**
-  (snap to common angles / neighbour orientations). Cut dimensions are
-  unaffected.
-- **Bundle code-splitting.** The build is a single ~1.18 MB chunk (mostly
-  Three.js). Fine for now; lazy-load / split if first-load matters.
-  - **Shortcuts** add shortcuts to activate all tools
