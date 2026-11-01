@@ -12,11 +12,17 @@ export interface ConfirmRequest {
   dismissOnly?: boolean
   /** A wider dialog, for reference content (tables) rather than a question. */
   wide?: boolean
+  /** Label for a second way to go ahead, offered beside the main one (see
+   *  {@link useChoice}). */
+  alternativeLabel?: string
 }
+
+/** How a dialog was answered: the main button, the alternative, or neither. */
+export type Answer = 'confirm' | 'alternative' | 'cancel'
 
 /** Internal: the pending request, plus how to answer it. */
 export interface PendingConfirm extends ConfirmRequest {
-  resolve: (ok: boolean) => void
+  resolve: (answer: Answer) => void
 }
 
 /** Set by the mounted <ConfirmHost />; the hook pushes requests through it. */
@@ -44,6 +50,16 @@ export function registerConfirmHost(fn: (request: PendingConfirm) => void) {
  *   if (!(await confirm({ title: 'Clear the design?', body: '…' }))) return
  */
 export function useConfirm() {
-  return (request: ConfirmRequest) =>
-    new Promise<boolean>((resolve) => open({ ...request, resolve }))
+  return (request: Omit<ConfirmRequest, 'alternativeLabel'>) =>
+    new Promise<boolean>((resolve) => open({ ...request, resolve: (answer) => resolve(answer === 'confirm') }))
+}
+
+/**
+ * Like {@link useConfirm}, for a question with two ways to go ahead: resolves
+ * with which button was pressed, `'alternative'` being the one labelled
+ * `alternativeLabel`.
+ */
+export function useChoice() {
+  return (request: ConfirmRequest & { alternativeLabel: string }) =>
+    new Promise<Answer>((resolve) => open({ ...request, resolve }))
 }

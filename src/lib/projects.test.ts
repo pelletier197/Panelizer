@@ -3,6 +3,7 @@ import {
   bundleAllProjects,
   bundleFilename,
   deleteProject,
+  findProjectByName,
   importProjects,
   listProjects,
   loadProject,
@@ -88,6 +89,20 @@ describe('saving and listing', () => {
   it('reports a save that storage refused', () => {
     full = true
     expect(saveProject('a', design())).toBe(false)
+  })
+})
+
+describe('findProjectByName', () => {
+  it('finds the most recent project of that name, ignoring case and spaces', () => {
+    saveProject('old', design({ name: 'Meuble salon' }), 1)
+    saveProject('other', design({ name: 'Desk' }), 2)
+    saveProject('new', design({ name: 'meuble salon ' }), 3)
+    expect(findProjectByName('Meuble Salon')?.id).toBe('new')
+  })
+
+  it('finds nothing when no project has the name', () => {
+    saveProject('a', design({ name: 'Desk' }), 1)
+    expect(findProjectByName('Shelf')).toBeUndefined()
   })
 })
 

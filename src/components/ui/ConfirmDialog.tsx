@@ -3,7 +3,7 @@ import { Button } from './Button'
 import { cx } from './cx'
 import { Kbd } from './Kbd'
 import { KEYS } from './keys'
-import { registerConfirmHost, type PendingConfirm } from './useConfirm'
+import { registerConfirmHost, type Answer, type PendingConfirm } from './useConfirm'
 
 /** Mount once, near the app root. Renders whichever confirmation is pending.
  *  See {@link useConfirm} for why this exists rather than `window.confirm`. */
@@ -12,16 +12,16 @@ export function ConfirmHost() {
 
   useEffect(() => registerConfirmHost(setRequest), [])
 
-  const settle = (ok: boolean) => {
-    request?.resolve(ok)
+  const settle = (answer: Answer) => {
+    request?.resolve(answer)
     setRequest(null)
   }
 
   useEffect(() => {
     if (!request) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') settle(false)
-      if (e.key === 'Enter') settle(true)
+      if (e.key === 'Escape') settle('cancel')
+      if (e.key === 'Enter') settle('confirm')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -35,7 +35,7 @@ export function ConfirmHost() {
       role="dialog"
       aria-modal="true"
       aria-label={request.title}
-      onClick={() => settle(false)}
+      onClick={() => settle('cancel')}
     >
       <div
         className={cx(
@@ -52,12 +52,15 @@ export function ConfirmHost() {
         <div className="text-small min-h-0 overflow-y-auto px-4 py-3 leading-relaxed text-ink-dim">
           {request.body}
         </div>
-        <div className="flex shrink-0 justify-end gap-3 border-t border-edge px-4 py-3">
+        <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-edge px-4 py-3">
           {!request.dismissOnly && (
-            <Button onClick={() => settle(false)}>
+            <Button onClick={() => settle('cancel')}>
               Cancel
               <Kbd keys={KEYS.cancel} />
             </Button>
+          )}
+          {request.alternativeLabel && (
+            <Button onClick={() => settle('alternative')}>{request.alternativeLabel}</Button>
           )}
           {/* An informational dialog's button only dismisses it — it isn't the
               primary action, and styling it as one competes with whatever the
@@ -65,7 +68,7 @@ export function ConfirmHost() {
           <Button
             variant={request.dismissOnly ? 'default' : request.destructive ? 'danger' : 'primary'}
             autoFocus
-            onClick={() => settle(true)}
+            onClick={() => settle('confirm')}
           >
             {request.confirmLabel ?? 'Continue'}
             <Kbd keys={KEYS.confirm} />
