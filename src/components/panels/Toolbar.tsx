@@ -42,6 +42,7 @@ const TOOL_SECTIONS: { label: string; tools: { tool: Tool; label: string }[] }[]
 ]
 
 /** Where the "Buy me a coffee" menu entry leads. */
+const REPO_URL = 'https://github.com/pelletier197/Panelizer'
 const SUPPORT_URL = 'https://buymeacoffee.com/pelletier197'
 
 const DIVIDER = <div className="my-1 border-t border-edge" />
@@ -315,6 +316,15 @@ export function Toolbar() {
 
               {DIVIDER}
 
+              <MenuItem
+                title="See the source, report a bug or suggest a feature"
+                onClick={() => {
+                  close()
+                  window.open(REPO_URL, '_blank', 'noopener,noreferrer')
+                }}
+              >
+                ★ Star on GitHub
+              </MenuItem>
               <MenuItem
                 onClick={() => {
                   close()
