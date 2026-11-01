@@ -8,6 +8,7 @@ import { sheetKey, type MissingStock } from './useCutlistModel'
 import { Button } from '../../ui/Button'
 import { Hint, Swatch } from '../../ui/Panel'
 import { cx } from '../../ui/cx'
+import { plural } from '../../../lib/plural'
 
 /** Longest sheet drawn this wide (px); everything else scales to match. On
  *  paper the sheets go wider so every part's label + size stays legible. */
@@ -87,7 +88,7 @@ export function CutResult({
             <h3 className="mt-0 mb-1.5 flex items-center gap-1.5 text-sm font-semibold">
               <Swatch color={group.color} /> {group.materialName} · {fmt(group.thickness)}
               <span className="ml-2 text-xs font-normal text-ink-dim">
-                {group.sheets.length} sheet{group.sheets.length === 1 ? '' : 's'} · {waste}% waste
+                {plural(group.sheets.length, 'sheet')} · {waste}% waste
               </span>
             </h3>
             <div className="flex flex-wrap gap-4">
@@ -214,7 +215,7 @@ function MissingStockNotice({ missing, unit }: { missing: MissingStock[]; unit: 
         <div className="flex items-center justify-between gap-2 py-1 text-sm" key={`${m.materialId}@${m.thickness}`}>
           <span>
             <Swatch color={materials.find((x) => x.id === m.materialId)?.color} />{' '}
-            {m.materialName} · {formatMeasurement(m.thickness, unit)} — {m.count} part{m.count === 1 ? '' : 's'}
+            {m.materialName} · {formatMeasurement(m.thickness, unit)} — {plural(m.count, 'part')}
           </span>
           <Button size="sm" onClick={() => addStock(m.materialId, m.thickness)}>+ Add sheet</Button>
         </div>

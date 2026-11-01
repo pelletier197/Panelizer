@@ -6,6 +6,7 @@ import { Menu, MenuItem, MenuLabel, MenuList } from '../ui/Menu'
 import { useConfirm } from '../ui/useConfirm'
 import { cx } from '../ui/cx'
 import { useImportFiles } from './useImportFiles'
+import { plural } from '../../lib/plural'
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago", then a plain date. */
 function timeAgo(ms: number, now = Date.now()): string {
@@ -15,7 +16,7 @@ function timeAgo(ms: number, now = Date.now()): string {
   const hours = Math.round(minutes / 60)
   if (hours < 24) return `${hours} h ago`
   const days = Math.round(hours / 24)
-  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+  if (days < 7) return `${plural(days, 'day')} ago`
   return new Date(ms).toLocaleDateString()
 }
 
@@ -94,7 +95,7 @@ export function ProjectSwitcher() {
                         {entry.name}
                       </span>
                       <span className="text-micro text-ink-faint">
-                        {entry.panelCount} panel{entry.panelCount === 1 ? '' : 's'} · {timeAgo(entry.updatedAt)}
+                        {plural(entry.panelCount, 'panel')} · {timeAgo(entry.updatedAt)}
                       </span>
                     </button>
                     <button

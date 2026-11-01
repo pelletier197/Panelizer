@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { CanvasTexture, NeutralToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector3 } from 'three'
+import { CanvasTexture, NeutralToneMapping, Object3D, PCFSoftShadowMap, PerspectiveCamera, Vector3 } from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
@@ -11,7 +11,7 @@ import { downloadFile, slugify } from '../../lib/persistence'
 import { useDesignStore } from '../../store/designStore'
 import { panelGeometry } from '../viewport/panelGeometry'
 import { lookOf } from '../viewport/finishLook'
-import { usePhotos } from '../viewport/photos'
+import { photosLoading, usePhotos } from '../viewport/photos'
 import { useEscapeToClose } from '../panels/cutlist/useCutlistModel'
 import { Button } from '../ui/Button'
 import { cx } from '../ui/cx'
@@ -71,6 +71,10 @@ function Presentation({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false)
 
   const bounds = useMemo(() => unionBounds(panels), [panels])
+  usePhotos()
+  // The sharp finishes arrive a moment after opening; until then the everyday
+  // ones show, so say so rather than let an image be saved without noticing.
+  const sharpening = photosLoading('present')
 
   const choose = (id: string) => {
     setAngle(id)
@@ -124,6 +128,16 @@ function Presentation({ onClose }: { onClose: () => void }) {
           </Canvas>
         )}
 
+        {sharpening && (
+          <p
+            role="status"
+            className="text-small absolute top-3 left-3 m-0 flex items-center gap-2 rounded-md border border-edge bg-surface/90 px-3 py-1.5 text-ink-dim shadow-lg shadow-black/30"
+          >
+            <span className="size-2 animate-pulse rounded-full bg-accent" />
+            Loading full-quality finishes…
+          </p>
+        )}
+
         {/* Preset angles, along the bottom where a thumb reaches them. */}
         <div className="absolute inset-x-0 bottom-3 flex justify-center px-3">
           <div
@@ -172,6 +186,11 @@ function Scene({
   const centre = new Vector3(...toMetres(bounds.min.map((v, a) => (v + bounds.max[a]) / 2) as Vec3))
   const floor = bounds.min[1] * MM_TO_M
   const radius = (Math.hypot(...bounds.max.map((v, a) => v - bounds.min[a])) / 2) * MM_TO_M
+  // What the key light aims at. Its shadows are only worked out within two
+  // radii of this point, so it must be the piece's centre, wherever the piece
+  // stands — aimed anywhere else, the shadow comes out cut off.
+  const aim = useMemo(() => new Object3D(), [])
+  aim.position.copy(centre)
 
   // The stage's actions run from buttons outside the canvas, at any time:
   // they read the latest canvas state through this ref.
@@ -255,7 +274,6 @@ function Scene({
         castShadow
         // High overhead and a little in front, as in a product shot: the
         // shadow pools under and around the piece, and inside it under the top.
-        // (Lights aim at the origin, which the design sits near.)
         position={[centre.x + radius * 0.8, floor + radius * 6, centre.z + radius * 2.2]}
         intensity={2}
         shadow-mapSize={[SHADOW_MAP_PX, SHADOW_MAP_PX]}
@@ -270,7 +288,9 @@ function Scene({
         shadow-camera-bottom={-radius * 2}
         shadow-camera-near={0.01}
         shadow-camera-far={radius * 12}
+        target={aim}
       />
+      <primitive object={aim} />
 
       {panels.map((p) => (
         <PresentPanel key={p.id} panel={p} material={findMaterial(materials, p.materialId)} />

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { formatMeasurement } from '../../lib/units'
 import { useDesignStore } from '../../store/designStore'
 import { cx } from '../ui/cx'
+import { plural } from '../../lib/plural'
 
 /**
  * The sidebar on a phone: a sheet along the bottom, under the 3D view rather
@@ -19,7 +20,7 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
       return `${p.name} · ${fmt(p.length)} × ${fmt(p.width)} × ${fmt(p.thickness)}`
     }
     if (selected.length > 1) return `${selected.length} panels selected`
-    return `${s.panels.length} panel${s.panels.length === 1 ? '' : 's'}`
+    return plural(s.panels.length, 'panel')
   })
 
   return (

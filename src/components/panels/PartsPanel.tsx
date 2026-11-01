@@ -10,6 +10,7 @@ import { PartNames } from '../ui/PartNames'
 import { cx } from '../ui/cx'
 import { treeChild, treeGroup } from '../ui/tree'
 import { TreeBranch } from '../ui/TreeBranch'
+import { plural } from '../../lib/plural'
 
 type PartRow = ReturnType<typeof buildParts>[number]
 
@@ -143,8 +144,7 @@ export function PartsPanel() {
       )}
 
       <p className="text-micro mt-2 mb-0 text-ink-faint">
-        {panels.length} panel{panels.length === 1 ? '' : 's'} · {rows.length} unique part
-        {rows.length === 1 ? '' : 's'} · dimensions in {UNIT_SUFFIX[unit]}
+        {plural(panels.length, 'panel')} · {plural(rows.length, 'unique part')} · dimensions in {UNIT_SUFFIX[unit]}
       </p>
     </Section>
   )

@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { clearSharedToken, linkToDesign, sharedToken } from '../../lib/share'
 import { findProjectByName } from '../../lib/projects'
-import type { Design } from '../../lib/persistence'
 import { useChoice, useConfirm } from '../ui/useConfirm'
 import { useDesignStore } from '../../store/designStore'
 import { frameView } from '../viewport/frameView'
+import { plural } from '../../lib/plural'
 
 /**
  * Opens a design that arrived in the URL.
@@ -37,16 +37,12 @@ export function useSharedLink() {
     if (!token || handled.current) return
     handled.current = true
 
-    // Whatever angle the last project was left at, start looking at this one
-    // — once it has rendered.
-    const show = (design: Design) => requestAnimationFrame(() => frameView(design.panels))
-
     void (async () => {
       try {
         const design = await linkToDesign(token)
         clearSharedToken()
 
-        const panels = `${design.panels.length} panel${design.panels.length === 1 ? '' : 's'}`
+        const panels = plural(design.panels.length, 'panel')
         const existing = findProjectByName(design.name)
 
         if (existing) {
@@ -56,9 +52,13 @@ export function useSharedLink() {
             confirmLabel: 'Replace',
             alternativeLabel: 'Open as new',
           })
-          if (answer === 'confirm') replaceProject(existing.id, design)
+          if (answer === 'confirm') {
+            replaceProject(existing.id, design)
+            // Opening a project frames it, but replacing the open one keeps
+            // its id, so nothing else would.
+            frameView(design.panels)
+          }
           if (answer === 'alternative') newProject(design)
-          if (answer !== 'cancel') show(design)
           return
         }
 
@@ -68,10 +68,7 @@ export function useSharedLink() {
           confirmLabel: 'Open',
         })
 
-        if (ok) {
-          newProject(design)
-          show(design)
-        }
+        if (ok) newProject(design)
       } catch {
         clearSharedToken()
         await confirm({
