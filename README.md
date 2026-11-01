@@ -36,7 +36,7 @@ Issues and pull requests are welcome. See the [Contributing Guide](CONTRIBUTING.
 
 ## ☕ Support
 
-Panelizer is free and always will be. [Buy me a coffee](https://buymeacoffee.com/pelletier197) if you'd like to support it, and don't forget to [star the repo](https://github.com/pelletier197/Panelizer)!
+Panelizer is free and always will be. [Buy me a coffee](https://buymeacoffee.com/pelletier197) if you'd like to support it, and don't forget to star the repo ⭐ (top right of this page)!
 
 ## 📄 License
 
