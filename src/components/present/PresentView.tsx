@@ -1,9 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { CanvasTexture, NeutralToneMapping, Object3D, PCFSoftShadowMap, PerspectiveCamera, Vector3 } from 'three'
-import { Canvas, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
+import { NeutralToneMapping, Object3D, PCFShadowMap, PerspectiveCamera, Vector3, type Texture } from 'three'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { AccumulativeShadows, Environment, Lightformer, OrbitControls, RandomizedLight } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
+import type { Bounds } from '../../lib/bounds'
 import { MM_TO_M, toMetres } from '../../lib/geometry'
 import { frameBounds, unionBounds } from '../../lib/framing'
 import { findMaterial, type Material } from '../../lib/materials'
@@ -35,6 +36,10 @@ const EXPORT_WIDTH = 2400
 const FOV = 35
 /** Key light shadow map resolution (px per side). */
 const SHADOW_MAP_PX = 4096
+/** How many passes the floor shadow is built up from, one per frame. */
+const FLOOR_SHADOW_FRAMES = 80
+/** Total strength of the lights the floor shadow is built from. */
+const FLOOR_LIGHT = 2.05
 const GLIDE_MS = 600
 
 const normalize = (v: Vec3): Vec3 => {
@@ -70,7 +75,17 @@ function Presentation({ onClose }: { onClose: () => void }) {
   const [angle, setAngle] = useState(START_ANGLE)
   const [saving, setSaving] = useState(false)
 
-  const bounds = useMemo(() => unionBounds(panels), [panels])
+  // The piece as presented: moved to stand on the origin, centred over it.
+  // The lights all aim there, so they light it the same wherever it was
+  // drawn.
+  const placed = useMemo(() => {
+    const b = unionBounds(panels)
+    if (!b) return null
+    const offset: Vec3 = [-(b.min[0] + b.max[0]) / 2, -b.min[1], -(b.min[2] + b.max[2]) / 2]
+    const move = (v: Vec3) => v.map((c, a) => c + offset[a]) as Vec3
+    return { offset, bounds: { min: move(b.min), max: move(b.max) } }
+  }, [panels])
+  const bounds = placed?.bounds ?? null
   usePhotos()
   // The sharp finishes arrive a moment after opening; until then the everyday
   // ones show, so say so rather than let an image be saved without noticing.
@@ -114,17 +129,16 @@ function Presentation({ onClose }: { onClose: () => void }) {
       <div className="relative min-h-0 flex-1">
         {bounds && (
           <Canvas
-            // Soft-edged shadow maps. (Variance shadow maps striped the floor
-            // and long panels on some GPUs; the key light's bias handles the
-            // self-shadowing instead.)
-            shadows={{ type: PCFSoftShadowMap }}
+            // Filtered shadow maps for the piece's own shadows. (Variance
+            // shadow maps striped long panels on some GPUs.)
+            shadows={{ type: PCFShadowMap }}
             dpr={[1, 2]}
             // Kept so a frame can be read back for saving.
             gl={{ preserveDrawingBuffer: true, antialias: true, toneMapping: NeutralToneMapping }}
             camera={{ fov: FOV, near: 0.01, far: 100 }}
           >
             <color attach="background" args={[BACKGROUND]} />
-            <Scene panels={panels} materials={materials} bounds={bounds} stage={stage} />
+            <Scene panels={panels} materials={materials} placed={placed!} stage={stage} />
           </Canvas>
         )}
 
@@ -171,24 +185,30 @@ function Presentation({ onClose }: { onClose: () => void }) {
 function Scene({
   panels,
   materials,
-  bounds,
+  placed: { bounds, offset },
   stage,
 }: {
   panels: Panel[]
   materials: Material[]
-  bounds: NonNullable<ReturnType<typeof unionBounds>>
+  /** The piece's bounds once standing on the origin, and how far (mm) its
+   *  panels move to get there. */
+  placed: { bounds: Bounds; offset: Vec3 }
   stage: React.RefObject<Stage | null>
 }) {
   const { gl, scene, camera, size, invalidate } = useThree()
   const controls = useThree((s) => s.controls) as { target: Vector3; update: () => void } | null
+
+  // When a finish's photo arrives its panels get a new material; the floor
+  // shadow (below) must start over to pick it up, so re-render with them.
+  usePhotos()
 
   // Scene sizes, in metres.
   const centre = new Vector3(...toMetres(bounds.min.map((v, a) => (v + bounds.max[a]) / 2) as Vec3))
   const floor = bounds.min[1] * MM_TO_M
   const radius = (Math.hypot(...bounds.max.map((v, a) => v - bounds.min[a])) / 2) * MM_TO_M
   // What the key light aims at. Its shadows are only worked out within two
-  // radii of this point, so it must be the piece's centre, wherever the piece
-  // stands — aimed anywhere else, the shadow comes out cut off.
+  // radii of this point, so it must be the piece's centre — aimed anywhere
+  // else, the shadow comes out cut off.
   const aim = useMemo(() => new Object3D(), [])
   aim.position.copy(centre)
 
@@ -273,11 +293,13 @@ function Scene({
       <directionalLight
         castShadow
         // High overhead and a little in front, as in a product shot: the
-        // shadow pools under and around the piece, and inside it under the top.
+        // piece shadows itself, inside under the top and behind its parts. (Its
+        // shadow on the floor is the soft one built up below.)
         position={[centre.x + radius * 0.8, floor + radius * 6, centre.z + radius * 2.2]}
         intensity={2}
         shadow-mapSize={[SHADOW_MAP_PX, SHADOW_MAP_PX]}
         shadow-bias={-0.0001}
+        shadow-radius={3}
         // Offset along the surface normal by about two shadow-map texels: a
         // texel covers (4 × radius) / SHADOW_MAP_PX here, so a long piece needs
         // more. Too little and flat faces shadow themselves in stripes.
@@ -292,18 +314,45 @@ function Scene({
       />
       <primitive object={aim} />
 
-      {panels.map((p) => (
-        <PresentPanel key={p.id} panel={p} material={findMaterial(materials, p.materialId)} />
-      ))}
+      <group position={toMetres(offset)}>
+        {panels.map((p) => (
+          <PresentPanel key={p.id} panel={p} material={findMaterial(materials, p.materialId)} />
+        ))}
+      </group>
 
-      <GroundShadow bounds={bounds} />
-      {/* The floor it stands on: invisible but for the shadow falling on it. */}
-      <mesh rotation-x={-Math.PI / 2} position={[centre.x, floor, centre.z]} receiveShadow>
-        {/* Only as far as the key light's shadows are worked out (±2 radii);
-            beyond it they come out as stray marks on the horizon. */}
-        <planeGeometry args={[radius * 4, radius * 4]} />
-        <shadowMaterial transparent opacity={0.42} color="#3a332b" />
-      </mesh>
+      {/* The shadow on the floor, as a softbox casts it: built up over a second
+          or so from lights spread around the key light's direction, and a few
+          from all over the room, so it is crisp where the piece touches the
+          floor, soft further out, and darkest underneath. */}
+      <HideEnvironment />
+      <AccumulativeShadows
+        temporal
+        frames={FLOOR_SHADOW_FRAMES}
+        scale={radius * 4}
+        position={[0, 0.0005, 0]}
+        color="#3a332b"
+        colorBlend={1.5}
+        opacity={0.9}
+        alphaTest={0.85}
+      >
+        <RandomizedLight
+          amount={8}
+          position={[radius * 0.8, radius * 6, radius * 2.2]}
+          radius={radius * 2}
+          ambient={0.35}
+          // Dim enough that open floor builds up to just past the shadow's
+          // cut-off (alphaTest, ~0.85 over three channels): darkness then
+          // follows how much light is blocked, rather than only the
+          // fully-blocked core showing.
+          intensity={FLOOR_LIGHT}
+          size={radius * 2}
+          near={0.01}
+          far={radius * 12}
+          mapSize={1024}
+          bias={0.0005}
+        />
+      </AccumulativeShadows>
+      <RestoreEnvironment />
 
       <OrbitControls
         makeDefault
@@ -315,6 +364,33 @@ function Scene({
       />
     </>
   )
+}
+
+/**
+ * The floor shadow builds up a map of the light reaching the floor from its
+ * own lights, during its frame callback; the studio environment's even light
+ * from all around would wash every shadow out of it. These two, placed either
+ * side of it, take the environment away for that callback and put it back
+ * before the frame is drawn. (Frame callbacks run in the order they were
+ * registered, which for siblings is the order they're written in.)
+ */
+let heldEnvironment: Texture | null = null
+
+function HideEnvironment() {
+  const scene = useThree((s) => s.scene)
+  useFrame(() => {
+    heldEnvironment = scene.environment
+    scene.environment = null
+  })
+  return null
+}
+
+function RestoreEnvironment() {
+  const scene = useThree((s) => s.scene)
+  useFrame(() => {
+    scene.environment = heldEnvironment
+  })
+  return null
 }
 
 /** One panel, in its finish under realistic light, casting and catching shadows. */
@@ -340,53 +416,3 @@ const PresentPanel = memo(function PresentPanel({ panel, material }: { panel: Pa
   )
 })
 
-/** How far (as a share of the footprint's larger side) the ground shadow
- *  fades out past the model's edges. */
-const SPREAD = 0.45
-const SHADOW_PX = 256
-
-/**
- * The soft darkening of the floor around where the piece stands — what makes
- * it sit on the floor rather than float: darkest under the footprint, fading
- * smoothly to nothing a little way out. Drawn by hand, pixel by pixel, as a
- * blur filter isn't available everywhere (iOS Safari).
- */
-function GroundShadow({ bounds }: { bounds: NonNullable<ReturnType<typeof unionBounds>> }) {
-  const w = (bounds.max[0] - bounds.min[0]) * MM_TO_M
-  const d = (bounds.max[2] - bounds.min[2]) * MM_TO_M
-  const spread = Math.max(w, d) * SPREAD
-  const width = w + spread * 2
-  const depth = d + spread * 2
-
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = canvas.height = SHADOW_PX
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    const image = ctx.createImageData(SHADOW_PX, SHADOW_PX)
-    for (let py = 0; py < SHADOW_PX; py++) {
-      for (let px = 0; px < SHADOW_PX; px++) {
-        // Distance (m) from this point of the floor to the footprint.
-        const x = ((px + 0.5) / SHADOW_PX - 0.5) * width
-        const z = ((py + 0.5) / SHADOW_PX - 0.5) * depth
-        const dx = Math.max(0, Math.abs(x) - w / 2)
-        const dz = Math.max(0, Math.abs(z) - d / 2)
-        const t = Math.min(1, Math.hypot(dx, dz) / spread)
-        const alpha = (1 - t) ** 2.2
-        image.data.set([0, 0, 0, Math.round(alpha * 255)], (py * SHADOW_PX + px) * 4)
-      }
-    }
-    ctx.putImageData(image, 0, 0)
-    return new CanvasTexture(canvas)
-  }, [w, d, spread, width, depth])
-  useEffect(() => () => texture?.dispose(), [texture])
-  if (!texture) return null
-
-  const centre = toMetres(bounds.min.map((v, a) => (v + bounds.max[a]) / 2) as Vec3)
-  return (
-    <mesh rotation-x={-Math.PI / 2} position={[centre[0], bounds.min[1] * MM_TO_M + 0.0003, centre[2]]} renderOrder={-1}>
-      <planeGeometry args={[width, depth]} />
-      <meshBasicMaterial map={texture} transparent opacity={0.45} depthWrite={false} color="#2e2820" />
-    </mesh>
-  )
-}
