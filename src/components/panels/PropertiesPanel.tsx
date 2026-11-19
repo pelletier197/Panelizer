@@ -6,6 +6,7 @@ import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
 import { mirroredCopies } from '../../lib/mirror'
+import { distributeAxis, distributePanels } from '../../lib/arrange'
 import { SIDE_NAMES, axisField } from '../../lib/geometry'
 import { CORNER_SIGNS } from '../../lib/rounding'
 import { MeasurementInput } from '../ui/MeasurementInput'
@@ -193,6 +194,7 @@ export function PropertiesPanel() {
   const duplicatePanels = useDesignStore((s) => s.duplicatePanels)
   const rotateSelection = useDesignStore((s) => s.rotateSelection)
   const mirrorSelection = useDesignStore((s) => s.mirrorSelection)
+  const distributeSelection = useDesignStore((s) => s.distributeSelection)
   const patchPanelsLive = useDesignStore((s) => s.patchPanelsLive)
   const commitPanelPatches = useDesignStore((s) => s.commitPanelPatches)
   const restorePanels = useDesignStore((s) => s.restorePanels)
@@ -204,11 +206,19 @@ export function PropertiesPanel() {
   const shiftHeld = useDesignStore((s) => s.boxKeyHeld)
   const [hoveredTurn, setHoveredTurn] = useState<0 | 1 | 2 | null>(null)
   const [hoveredMirror, setHoveredMirror] = useState<0 | 1 | 2 | null>(null)
+  const [hoveredSpace, setHoveredSpace] = useState(false)
+  // The axis the selection can be spaced evenly along, if any.
+  const spaceAxis = distributeAxis(selected)
 
   // While a rotate button is hovered, ghost the selection where that turn
   // would put it. Recomputed after a click too, so the ghost always shows the
   // *next* turn, and cleared when the pointer leaves or the panel unmounts.
   useEffect(() => {
+    if (hoveredSpace && spaceAxis !== null) {
+      const moved = new Map(distributePanels(selected, spaceAxis).map((x) => [x.id, x.patch]))
+      setRotatePreview(selected.filter((p) => moved.has(p.id)).map((p) => ({ ...p, ...moved.get(p.id) })))
+      return
+    }
     if (hoveredMirror !== null && selected.length > 0) {
       setRotatePreview(mirroredCopies(selected, hoveredMirror, shiftHeld ? -1 : 1))
       return
@@ -219,7 +229,7 @@ export function PropertiesPanel() {
     }
     const patches = new Map(rotatePanels(selected, hoveredTurn, shiftHeld ? -1 : 1).map((x) => [x.id, x.patch]))
     setRotatePreview(selected.map((p) => ({ ...p, ...patches.get(p.id) })))
-  }, [hoveredTurn, hoveredMirror, shiftHeld, selected, setRotatePreview])
+  }, [hoveredTurn, hoveredMirror, hoveredSpace, spaceAxis, shiftHeld, selected, setRotatePreview])
   useEffect(() => () => setRotatePreview([]), [setRotatePreview])
 
   if (selected.length === 0) {
@@ -415,6 +425,21 @@ export function PropertiesPanel() {
           ))}
         </div>
       </div>
+
+      {/* Only offered when there's something to space: three or more parts in
+          a row, not evenly spaced yet. The axis is the row's. */}
+      {spaceAxis !== null && (
+        <Button
+          size="sm"
+          className="mt-1 w-full"
+          title="Same gap between every part · the two outermost stay put"
+          onClick={() => distributeSelection()}
+          onMouseEnter={() => setHoveredSpace(true)}
+          onMouseLeave={() => setHoveredSpace(false)}
+        >
+          Space evenly along {'XYZ'[spaceAxis]}
+        </Button>
+      )}
 
       <FieldGroup title="Face" unit={UNIT_SUFFIX[unit]}>
         {measure('Length', length, 'length')}
