@@ -321,9 +321,29 @@ export function PropertiesPanel() {
       title={single ? 'Panel' : `${selected.length} panels`}
       action={
         <div className="flex gap-1.5">
+          {/* Only offered when there's something to space: three or more parts
+              in a row, not evenly spaced yet. The axis is the row's. */}
+          {spaceAxis !== null && (
+            <Button
+              size="sm"
+              title={`Same gap between every part along ${'XYZ'[spaceAxis]} · the two outermost stay put`}
+              onClick={() => {
+                // The button goes away once the parts are spaced, so no
+                // mouseleave would clear the hover.
+                setHoveredSpace(false)
+                distributeSelection()
+              }}
+              onMouseEnter={() => setHoveredSpace(true)}
+              onMouseLeave={() => setHoveredSpace(false)}
+            >
+              Space evenly
+            </Button>
+          )}
           <Button size="sm" onClick={() => duplicatePanels(ids)}>
             Duplicate
-            <Kbd keys={KEYS.duplicate} />
+            {/* Room for Space evenly in a narrow sidebar; the shortcut stays
+                in the cheat sheet. */}
+            {spaceAxis === null && <Kbd keys={KEYS.duplicate} />}
           </Button>
           <Button size="sm" variant="danger" onClick={() => removePanels(ids)}>
             Delete
@@ -425,21 +445,6 @@ export function PropertiesPanel() {
           ))}
         </div>
       </div>
-
-      {/* Only offered when there's something to space: three or more parts in
-          a row, not evenly spaced yet. The axis is the row's. */}
-      {spaceAxis !== null && (
-        <Button
-          size="sm"
-          className="mt-1 w-full"
-          title="Same gap between every part · the two outermost stay put"
-          onClick={() => distributeSelection()}
-          onMouseEnter={() => setHoveredSpace(true)}
-          onMouseLeave={() => setHoveredSpace(false)}
-        >
-          Space evenly along {'XYZ'[spaceAxis]}
-        </Button>
-      )}
 
       <FieldGroup title="Face" unit={UNIT_SUFFIX[unit]}>
         {measure('Length', length, 'length')}
