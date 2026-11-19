@@ -8,6 +8,7 @@ import type { Bounds } from '../../lib/bounds'
 import { MM_TO_M, toMetres } from '../../lib/geometry'
 import { frameBounds, unionBounds } from '../../lib/framing'
 import { findMaterial, type Material } from '../../lib/materials'
+import { parseSolidKey, solidKey, solidsOf } from '../../lib/cuts'
 import { downloadFile, slugify } from '../../lib/persistence'
 import { useDesignStore } from '../../store/designStore'
 import { panelGeometry } from '../viewport/panelGeometry'
@@ -201,6 +202,8 @@ function Scene({
   // When a finish's photo arrives its panels get a new material; the floor
   // shadow (below) must start over to pick it up, so re-render with them.
   usePhotos()
+  // Joints are cut from every panel, hidden ones too.
+  const solids = solidsOf(useDesignStore((s) => s.panels))
 
   // Scene sizes, in metres.
   const centre = new Vector3(...toMetres(bounds.min.map((v, a) => (v + bounds.max[a]) / 2) as Vec3))
@@ -315,8 +318,14 @@ function Scene({
       <primitive object={aim} />
 
       <group position={toMetres(offset)}>
+        {/* Hidden panels aren't shown, but still cut the ones they join. */}
         {panels.map((p) => (
-          <PresentPanel key={p.id} panel={p} material={findMaterial(materials, p.materialId)} />
+          <PresentPanel
+            key={p.id}
+            panel={p}
+            solid={solidKey(p, solids.get(p.id))}
+            material={findMaterial(materials, p.materialId)}
+          />
         ))}
       </group>
 
@@ -394,8 +403,16 @@ function RestoreEnvironment() {
 }
 
 /** One panel, in its finish under realistic light, casting and catching shadows. */
-const PresentPanel = memo(function PresentPanel({ panel, material }: { panel: Panel; material: Material }) {
-  const geometry = useMemo(() => panelGeometry(panel), [panel])
+const PresentPanel = memo(function PresentPanel({
+  panel,
+  solid,
+  material,
+}: {
+  panel: Panel
+  solid: string
+  material: Material
+}) {
+  const geometry = useMemo(() => panelGeometry(panel, parseSolidKey(solid)), [panel, solid])
   useEffect(() => () => geometry.dispose(), [geometry])
   usePhotos() // re-render when the finish's photo arrives
   const look = lookOf(material, true)

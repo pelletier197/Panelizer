@@ -3,6 +3,7 @@ import { createPanel, defaultThickness, followGrain } from '../lib/panel'
 import type { PanelPatch } from '../lib/resize'
 import { rotatePanels } from '../lib/rotate'
 import { findMaterial } from '../lib/materials'
+import { dropCutsBy } from '../lib/cuts'
 import type { Slice } from './types'
 
 /** How far (mm, along X) a duplicate or paste lands from its source, so the
@@ -60,17 +61,24 @@ export interface PanelsSlice {
 export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPanels, applyPatches }) => {
   // Add fresh copies of `sources`, shifted along X by `offset` mm, and select
   // them — one undo step. Shared by duplicate and paste. A copy whose material
-  // was deleted since it was copied falls back to the first material.
+  // was deleted since it was copied falls back to the first material. A cut
+  // made by a panel copied along with it points at that panel's copy, so a
+  // copied joint stays a joint; one made by a panel left behind still points
+  // at it.
   const addCopies = (sources: Panel[], offset: number) => {
     if (sources.length === 0) return
     const { materials } = get()
-    const copies = sources.map((source) =>
+    const made = sources.map((source) =>
       createPanel({
         ...source,
         name: `${source.name} copy`,
         materialId: findMaterial(materials, source.materialId).id,
         position: [source.position[0] + offset, source.position[1], source.position[2]],
       }),
+    )
+    const copyOf = new Map(sources.map((source, i) => [source.id, made[i].id]))
+    const copies = made.map((copy) =>
+      copy.cuts ? { ...copy, cuts: copy.cuts.map((c) => ({ ...c, by: copyOf.get(c.by) ?? c.by })) } : copy,
     )
     commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
   }
@@ -133,7 +141,8 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
       if (ids.length === 0) return
       const drop = new Set(ids)
       commit({
-        panels: get().panels.filter((p) => !drop.has(p.id)),
+        // The joints the removed panels cut go with them.
+        panels: dropCutsBy(get().panels.filter((p) => !drop.has(p.id)), drop),
         selectedIds: get().selectedIds.filter((x) => !drop.has(x)),
       })
     },

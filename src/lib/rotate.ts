@@ -102,6 +102,18 @@ export function rotatePanels(panels: Panel[], about: AxisIndex, dir: 1 | -1): Pa
 
     if (panel.corners) patch.corners = turnCorners(panel, normal, about, dir)
 
+    // A lap's half is a world direction: it turns with the panel.
+    if (panel.cuts?.some((c) => c.half)) {
+      patch.cuts = panel.cuts.map((cut) => {
+        if (!cut.half) return cut
+        const towards: Vec3 = [0, 0, 0]
+        towards[cut.half.axis] = cut.half.side
+        const axis = turnAxis(cut.half.axis, about)
+        const side = Math.sign(turnPoint(towards, [0, 0, 0], about, dir)[axis]) as 1 | -1
+        return { ...cut, half: { axis, side } }
+      })
+    }
+
     if (panel.grain !== 'none') {
       const grainAxis = ([0, 1, 2] as AxisIndex[]).find((a) => axisField(panel.normal, a) === panel.grain)!
       patch.grain = axisField(normal, turnAxis(grainAxis, about)) as 'length' | 'width'

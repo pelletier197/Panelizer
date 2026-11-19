@@ -257,3 +257,31 @@ describe('parse — grain set by hand', () => {
     expect(parse(file(undefined)).panels[0]).not.toHaveProperty('grainSet')
   })
 })
+
+describe('cuts', () => {
+  it('round-trip through a file', () => {
+    const cuts: Panel['cuts'] = [{ by: 'shelf' }, { by: 'rail', half: { axis: 1, side: -1 } }]
+    const d = parse(JSON.stringify(serialize(design({ panels: [panel({ cuts })] }))))
+    expect(d.panels[0].cuts).toEqual(cuts)
+  })
+
+  it('are absent for older files (no joints cut)', () => {
+    expect(parse(JSON.stringify({ panels: [panel()] })).panels[0].cuts).toBeUndefined()
+  })
+
+  it('keep only the readable cuts, keeping the panel', () => {
+    const cuts = [
+      { by: 'ok' },
+      { by: '' },
+      { by: 3 },
+      { by: 'x', half: { axis: 4, side: 1 } },
+      { by: 'y', half: { axis: 0, side: 0 } },
+      'cut',
+    ]
+    const d = parse(JSON.stringify({ panels: [{ ...panel(), cuts }] }))
+    expect(d.panels[0].cuts).toEqual([{ by: 'ok' }])
+    const none = parse(JSON.stringify({ panels: [{ ...panel(), cuts: 'groove' }] }))
+    expect(none.panels).toHaveLength(1)
+    expect(none.panels[0].cuts).toBeUndefined()
+  })
+})

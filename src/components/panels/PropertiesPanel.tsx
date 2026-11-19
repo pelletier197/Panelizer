@@ -5,7 +5,7 @@ import { isAutoGrain } from '../../lib/panel'
 import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
-import { axisField } from '../../lib/geometry'
+import { SIDE_NAMES, axisField } from '../../lib/geometry'
 import { CORNER_SIGNS } from '../../lib/rounding'
 import { MeasurementInput } from '../ui/MeasurementInput'
 import { Button } from '../ui/Button'
@@ -17,13 +17,6 @@ import { KEYS } from '../ui/keys'
 import { useTouch } from '../../hooks/useMedia'
 
 type CornerIndex = 0 | 1 | 2 | 3
-
-/** World direction names for each axis: [the − side, the + side]. */
-const SIDE_NAMES = [
-  ['left', 'right'],
-  ['bottom', 'top'],
-  ['back', 'front'],
-] as const
 
 /**
  * The label of a corner field: a small square with the corner in question

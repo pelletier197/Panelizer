@@ -153,3 +153,18 @@ describe('rotatePanels — corner radii', () => {
     expect(patch.corners).toBeUndefined()
   })
 })
+
+describe('rotatePanels — lap cuts', () => {
+  it('turn a lap half with the panel, so the same wood comes out', () => {
+    // A half taken off the top (+Y); a quarter turn about Z (+X → +Y) takes
+    // +Y onto −X.
+    const p = panel({ normal: 'z', cuts: [{ by: 'other', half: { axis: 1, side: 1 } }, { by: 'shelf' }] })
+    const [{ patch }] = rotatePanels([p], 2, 1)
+    expect(patch.cuts).toEqual([{ by: 'other', half: { axis: 0, side: -1 } }, { by: 'shelf' }])
+  })
+
+  it('leave panels with whole-shape cuts alone, since those follow the cutting panel', () => {
+    const [{ patch }] = rotatePanels([panel({ cuts: [{ by: 'shelf' }] })], 1, 1)
+    expect(patch.cuts).toBeUndefined()
+  })
+})

@@ -4,6 +4,7 @@ import { Edges, TransformControls } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
 import { MM_TO_M, toMetres } from '../../lib/geometry'
 import { findMaterial } from '../../lib/materials'
+import { parseSolidKey } from '../../lib/cuts'
 import { roundToUnitGrid } from '../../lib/units'
 import { SNAP_THRESHOLD_MM, snapGroupDelta, snapHintFromTarget } from '../../lib/snapping'
 import { useDesignStore } from '../../store/designStore'
@@ -39,7 +40,7 @@ function singleAxis(raw: Vec3): 0 | 1 | 2 | null {
  *  attaches a translate gizmo. Dragging only moves the panel; its size (and so
  *  its thickness) is never touched here, matching the "thickness is locked in
  *  the viewport" rule. */
-export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
+export const PanelMesh = memo(function PanelMesh({ panel, solid }: { panel: Panel; solid: string }) {
   const meshRef = useRef<Mesh>(null!)
   // Narrow subscriptions on purpose: every drag frame replaces `panels`, and
   // subscribing to the whole list or selection would re-render every mesh in
@@ -80,23 +81,27 @@ export const PanelMesh = memo(function PanelMesh({ panel }: { panel: Panel }) {
   // a readout gesture has been opened this drag.
   const axisRef = useRef<0 | 1 | 2 | null>(null)
 
-  // Rounded corners need a real outline; square panels keep the plain box.
-  // Rebuilt only when the shape or grain changes — not on every move, which
-  // only changes the position.
+  // Rounded corners need a real outline, and cut joints a diced shape
+  // (`solid`, see lib/cuts); square panels keep the plain box. Rebuilt only
+  // when the shape or grain changes — not on every move, which only changes
+  // the position.
   const { id, length, width, thickness, normal, grain } = panel
   const cornersKey = panel.corners?.join(',') ?? ''
   const geometry = useMemo(
     () =>
-      panelGeometry({
-        id,
-        length,
-        width,
-        thickness,
-        normal,
-        grain,
-        corners: cornersKey ? (cornersKey.split(',').map(Number) as Panel['corners']) : undefined,
-      }),
-    [id, length, width, thickness, normal, grain, cornersKey],
+      panelGeometry(
+        {
+          id,
+          length,
+          width,
+          thickness,
+          normal,
+          grain,
+          corners: cornersKey ? (cornersKey.split(',').map(Number) as Panel['corners']) : undefined,
+        },
+        parseSolidKey(solid),
+      ),
+    [id, length, width, thickness, normal, grain, cornersKey, solid],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
   const position = toMetres(panel.position)

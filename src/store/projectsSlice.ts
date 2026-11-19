@@ -36,6 +36,7 @@ const FRESH_SESSION = {
   snapHints: [],
   boxPreview: [],
   rotatePreview: [],
+  jointEditor: null,
 } satisfies Partial<DesignState>
 
 /** The projects slice, starting on project `initialId`. */

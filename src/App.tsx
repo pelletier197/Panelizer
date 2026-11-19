@@ -1,6 +1,8 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react'
 import { Toolbar } from './components/panels/Toolbar'
 import { PropertiesPanel } from './components/panels/PropertiesPanel'
+import { JointsPanel } from './components/panels/JointsPanel'
+import { JointEditor } from './components/joints/JointEditor'
 import { MaterialsPanel } from './components/panels/MaterialsPanel'
 import { PartsPanel } from './components/panels/PartsPanel'
 import { Viewport } from './components/viewport/Viewport'
@@ -61,6 +63,7 @@ export default function App() {
         </div>
         <Side>
           <PropertiesPanel />
+          <JointsPanel />
           <MaterialsPanel />
           <PartsPanel />
         </Side>
@@ -71,6 +74,7 @@ export default function App() {
       <OnceOpened open={presentOpen}>
         <PresentView />
       </OnceOpened>
+      <JointEditor />
       <ConfirmHost />
     </div>
   )

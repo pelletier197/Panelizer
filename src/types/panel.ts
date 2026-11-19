@@ -50,6 +50,24 @@ export interface Panel {
    *  face's own frame — see `lib/rounding.ts` for the numbering. Absent means
    *  square corners. Rounding stays inside the panel's rectangle. */
   corners?: [number, number, number, number]
+  /** Wood taken out of this panel by the panels it's joined to — dados,
+   *  grooves, rabbets, laps. Each cut follows the panel doing the cutting as
+   *  it moves or resizes (see `lib/cuts.ts`). Absent means a plain box. The
+   *  cutlist still sees the full rectangle: you cut the part, then the joint. */
+  cuts?: Cut[]
+}
+
+/**
+ * A cut taken out of a panel by another panel, `by`. Without `half`, the
+ * other panel's whole shape comes out where they meet (as that panel is
+ * itself cut, so joints chain: a post cut down to a quarter only takes a
+ * quarter out of the rails). With `half`, only half of where the two boxes
+ * meet comes out: the half on the `side` (−1 low, +1 high) of its middle
+ * along world `axis` — one side of a half lap.
+ */
+export interface Cut {
+  by: string
+  half?: { axis: 0 | 1 | 2; side: -1 | 1 }
 }
 
 /** Woodworking default: grain runs along the longer face edge. Ties go to
