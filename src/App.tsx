@@ -9,6 +9,7 @@ import { Viewport } from './components/viewport/Viewport'
 import { GestureReadout } from './components/viewport/GestureReadout'
 import { ViewportHint } from './components/viewport/ViewportHint'
 import { FitButton } from './components/viewport/FitButton'
+import { PieceReadout } from './components/viewport/PieceReadout'
 import { WebGLUnavailable } from './components/viewport/WebGLUnavailable'
 import { ResizableSidebar } from './components/layout/ResizableSidebar'
 import { MobileDrawer } from './components/layout/MobileDrawer'
@@ -54,6 +55,7 @@ export default function App() {
             <>
               <Viewport />
               <ViewportHint />
+              <PieceReadout />
               <FitButton />
               <GestureReadout />
             </>

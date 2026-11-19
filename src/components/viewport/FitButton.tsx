@@ -19,7 +19,7 @@ export function FitButton() {
   }
 
   return (
-    <Button className="absolute top-9 right-3 print:hidden" aria-label="Fit the view" onClick={fit}>
+    <Button className="absolute top-20 right-3 md:top-14 print:hidden" aria-label="Fit the view" onClick={fit}>
       ⤢ Fit
     </Button>
   )

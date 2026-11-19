@@ -4,18 +4,16 @@ import { useThree } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import type { Panel } from '../../types/panel'
 import { axisField, toMetres } from '../../lib/geometry'
-import { panelBounds } from '../../lib/bounds'
+import { panelBounds, type Bounds } from '../../lib/bounds'
+import { unionBounds } from '../../lib/framing'
 import { CORNER_SIGNS, cornerRadii } from '../../lib/rounding'
 import { useDesignStore } from '../../store/designStore'
-import { palette } from './palette'
+import { AXIS_COLORS, palette } from './palette'
 
 type Vec3 = [number, number, number]
 type AxisIndex = 0 | 1 | 2
 type Segment = [Vec3, Vec3]
 
-/** X / Y / Z in the colours the move arrows and the axis gizmo use, so a
- *  position field points the same way the arrow you'd drag does. */
-const AXIS_COLORS = ['#ff3653', '#8adb00', '#2c8fff'] as const
 
 /** Drawn under every highlight line, a little wider, so the line keeps a dark
  *  edge whatever it crosses — the lavender selection tint included. */
@@ -51,6 +49,21 @@ function sizeEdges(panel: Panel, field: 'length' | 'width' | 'thickness'): Segme
       ? (axes.filter((a) => a !== axis) as [AxisIndex, AxisIndex])
       : [axes.find((a) => a !== axis && a !== normal)!, normal]
 
+  return [min[across], max[across]].map((offset) => {
+    const a: Vec3 = [0, 0, 0]
+    a[across] = offset
+    a[fixed] = max[fixed]
+    const b: Vec3 = [...a]
+    a[axis] = min[axis]
+    b[axis] = max[axis]
+    return [a, b] as Segment
+  })
+}
+
+/** The two edges of a box running along `axis` on its top, front side — the
+ *  span an overall size measures. Along Y, the two front uprights. */
+function extentEdges({ min, max }: Bounds, axis: AxisIndex): Segment[] {
+  const [across, fixed]: [AxisIndex, AxisIndex] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1]
   return [min[across], max[across]].map((offset) => {
     const a: Vec3 = [0, 0, 0]
     a[across] = offset
@@ -127,6 +140,7 @@ export function FieldHighlight() {
   const selected = useDesignStore(
     useShallow((s) => s.panels.filter((p) => s.selectedIds.includes(p.id) && !p.hidden)),
   )
+  const panels = useDesignStore((s) => s.panels)
   const invalidate = useThree((s) => s.invalidate)
 
   // The canvas draws on demand; ask for a frame when the highlight comes and
@@ -135,16 +149,23 @@ export function FieldHighlight() {
 
   if (!highlight) return null
 
-  const segments = selected.flatMap((panel) => {
+  // An overall size spans the selection as a whole, or the whole piece.
+  const extentBox = highlight.kind === 'extent' ? unionBounds(selected.length > 0 ? selected : panels) : null
+  const segments = (extentBox && highlight.kind === 'extent'
+    ? extentEdges(extentBox, highlight.axis).map((ends, i) => ({ key: `extent:${i}`, ends }))
+    : null) ?? selected.flatMap((panel) => {
     const lines: Vec3[][] =
       highlight.kind === 'size'
         ? sizeEdges(panel, highlight.field)
         : highlight.kind === 'corner'
           ? [cornerOutline(panel, highlight.index)]
-          : [positionAxis(panel, highlight.axis)]
+          : highlight.kind === 'position'
+            ? [positionAxis(panel, highlight.axis)]
+            : []
     return lines.map((ends, i) => ({ key: `${panel.id}:${i}`, ends }))
   })
-  const color = highlight.kind === 'position' ? AXIS_COLORS[highlight.axis] : palette().fieldHighlight
+  const color =
+    highlight.kind === 'position' || highlight.kind === 'extent' ? AXIS_COLORS[highlight.axis] : palette().fieldHighlight
 
   return (
     <>
