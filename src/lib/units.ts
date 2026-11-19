@@ -75,23 +75,15 @@ export function fromMm(mm: number, unit: Unit): number {
 }
 
 /**
- * Parse a free-text measurement into millimetres, or `null` if it makes no
- * sense. Accepts decimals (`24.5`), whole+fraction (`23 3/4`), bare fractions
- * (`3/4`) and an optional trailing unit; a bare number uses `defaultUnit`.
+ * Parse a single free-text measurement into millimetres, or `null` if it makes
+ * no sense or is an expression. Accepts decimals (`24.5`), whole + fraction
+ * (`23 3/4`), bare fractions (`3/4`), feet and inches together (`5' 3"`) and
+ * an optional unit; a bare number uses `defaultUnit`. A leading `-` is fine.
  */
 export function parseMeasurement(raw: string, defaultUnit: Unit): number | null {
-  const text = normalizeFractions(raw).trim().toLowerCase()
-  if (!text) return null
-
-  const match = text.match(/^([0-9./\s-]+?)\s*([a-z"']*)$/)
-  if (!match) return null
-  const [, numberPart, unitPart] = match
-
-  const mmPerUnit = unitPart ? INPUT_UNIT_MM[unitPart] : MM_PER_UNIT[defaultUnit]
-  if (mmPerUnit === undefined) return null
-
-  const value = parseNumeric(numberPart)
-  return value === null ? null : value * mmPerUnit
+  const tokens = lex(normalizeFractions(raw))
+  if (!tokens || !isPlain(tokens)) return null
+  return evaluate(tokens, defaultUnit)
 }
 
 /** Result of evaluating a field's text: the value in mm, plus the display unit
@@ -103,148 +95,225 @@ export interface EvalResult {
 }
 
 /**
- * Evaluate a measurement field's text, supporting simple arithmetic on top of
- * {@link parseMeasurement}. Operators (`+ - * /`) need no surrounding spaces —
- * they're auto-padded, while fractions (`3/4`), mixed numbers (`23 3/4`) and
- * negative literals (`-17`) are left intact:
+ * Evaluate a measurement field's text: a measurement, or arithmetic on
+ * measurements with `+ - * /` (or `× ÷`) and parentheses, usual precedence,
+ * spaces optional:
  *
  *   `30+15+2-3`        → 44 (in the box's unit)
- *   `+3`               → current value + 3
- *   `600/2`            → 300      (`*` / `/` take a plain scalar)
+ *   `(3 1/2) / 2`      → 1 3/4
+ *   `3.5/2`            → 1.75     (a fraction bar needs whole numbers)
  *   `23 3/4 + 1/2 in`  → mixed units, result kept in the box's unit
- *   `25 5/8 - 3 * 1/2` → 24 1/8 (`*` / `/` before `+` / `-`)
+ *   `5' 3"`            → 63"      (feet and inches side by side add up)
+ *   `+3`, `*2`, `/2`   → start from the box's current value
+ *   `-3`               → minus three, not "current minus three", so negative
+ *                        values can be typed at all
  *
- * Usual precedence, no parentheses — a field calculator, not a full expression
- * engine. Returns `null` if anything fails to parse.
+ * A bare number is in the box's unit; a typed unit makes it a length of its
+ * own, so `10 + 1 in` in a mm box is 35.4. A length can be scaled by a number
+ * (`2 * 3 in`) but not multiplied or divided by another length. Returns null
+ * if anything fails to parse, or on a division by zero.
  */
 export function evaluateMeasurement(raw: string, currentMm: number, defaultUnit: Unit): EvalResult | null {
-  const text = normalizeFractions(raw).trim()
-  if (!text) return null
+  const tokens = lex(normalizeFractions(raw))
+  if (!tokens || tokens.length === 0) return null
 
-  const tokens = tokenize(padOperators(text))
-
-  // No operators: a plain measurement — keep the existing unit-aware behaviour,
-  // including adopting an explicitly typed unit.
-  if (!tokens.some((t) => 'op' in t)) {
-    const mm = parseMeasurement(text, defaultUnit)
-    return mm === null ? null : { mm, explicitUnit: detectDisplayUnit(text) }
+  // A plain measurement adopts the unit it was typed in.
+  if (isPlain(tokens)) {
+    const mm = evaluate(tokens, defaultUnit)
+    return mm === null ? null : { mm, explicitUnit: detectDisplayUnit(raw) }
   }
 
-  // An expression always keeps the box's own unit.
-  const mm = foldExpression(tokens, currentMm, defaultUnit)
+  // Leading `+`, `*` or `/`: carry on from what's in the box.
+  const first = tokens[0]
+  const relative = first.kind === 'op' && first.op !== '-'
+  const full: Token[] = relative ? [{ kind: 'num', value: currentMm, mm: true }, ...tokens] : tokens
+  const mm = evaluate(full, defaultUnit)
   return mm === null ? null : { mm, explicitUnit: null }
 }
 
-/** One element of a field expression: an operator, or a value term (which may
- *  itself be a multi-word mixed number like `23 3/4`). */
-type Token = { op: string } | { term: string }
-
-const isOperator = (t: string) => t === '+' || t === '-' || t === '*' || t === '/'
-
 /**
- * Make spaces optional around operators. `+` and `*` never appear inside a
- * number, so pad them freely. A `-` is only an operator when it directly
- * follows a value (digit / inch-mark / `)`); a leading or post-operator `-`
- * stays the sign of a negative literal. `/` is left alone — bare `3/4` is a
- * fraction (and `600/2` reads the same either way).
+ * One piece of a field's text. A number carries its value and whether a unit
+ * was typed with it: with one (`3 in`) it's a length, already in mm; without
+ * (`3`), a plain number that becomes the box's unit only if it ends up a
+ * length. Mixed numbers (`23 3/4`) and fractions (`3/4`) are single numbers.
  */
-function padOperators(text: string): string {
-  return text
-    .replace(/^\//, '/ ') // leading `/` is a relative divide (`/2` halves)
-    .replace(/([+*])/g, ' $1 ')
-    .replace(/([\d"')])\s*-\s*/g, '$1 - ')
+type Token =
+  | { kind: 'num'; value: number; mm: boolean }
+  | { kind: 'op'; op: '+' | '-' | '*' | '/' }
+  | { kind: 'paren'; open: boolean }
+
+const OPERATORS: Record<string, '+' | '-' | '*' | '/'> = {
+  '+': '+',
+  '-': '-',
+  '−': '-',
+  '*': '*',
+  '×': '*',
+  '/': '/',
+  '÷': '/',
 }
 
-/** Split on whitespace, regrouping consecutive value tokens into single terms
- *  so a mixed fraction like `23 3/4` survives as one operand. */
-function tokenize(padded: string): Token[] {
+/** Whole or decimal number: `3`, `3.5`, `.5`. */
+const NUMBER = /^(\d+(?:\.\d*)?|\.\d+)/
+/** A unit right after a number, spaces allowed: `in`, `mm`, `"`, `'`. */
+const UNIT = /^\s*([a-z]+|"|')/i
+
+/**
+ * Split a field's text into tokens, or null on anything unreadable. The one
+ * judgement made here is what a `/` between two numbers means: written tight
+ * between two whole numbers (`3/4`) it's a fraction bar; anywhere else
+ * (`3.5/2`, `600 / 2`, after a `)`) it divides. `23 3/4` — a whole number, a
+ * space, then a fraction — is one mixed number.
+ */
+function lex(text: string): Token[] | null {
   const tokens: Token[] = []
-  let buffer: string[] = []
-  const flush = () => {
-    if (buffer.length) {
-      tokens.push({ term: buffer.join(' ') })
-      buffer = []
-    }
-  }
+  let rest = text.trim()
 
-  for (const token of padded.split(/\s+/).filter(Boolean)) {
-    if (isOperator(token)) {
-      flush()
-      tokens.push({ op: token })
+  while (rest.length > 0) {
+    const char = rest[0]
+    if (/\s/.test(char)) {
+      rest = rest.trimStart()
+      continue
+    }
+    if (char === '(' || char === ')') {
+      tokens.push({ kind: 'paren', open: char === '(' })
+      rest = rest.slice(1)
+      continue
+    }
+    if (OPERATORS[char]) {
+      tokens.push({ kind: 'op', op: OPERATORS[char] })
+      rest = rest.slice(1)
+      continue
+    }
+
+    const number = rest.match(NUMBER)
+    if (!number) return null
+    let value = parseFloat(number[1])
+    rest = rest.slice(number[1].length)
+    const whole = /^\d+$/.test(number[1])
+
+    // `3/4`: a fraction bar, tight between whole numbers.
+    const fraction = whole ? rest.match(/^\/(\d+)(?![\d.])/) : null
+    if (fraction) {
+      const den = Number(fraction[1])
+      if (den === 0) return null
+      value = value / den
+      rest = rest.slice(fraction[0].length)
     } else {
-      buffer.push(token)
+      // `23 3/4`: a number, a space, then a fraction.
+      const mixed = rest.match(/^\s+(\d+)\/(\d+)(?![\d.])/)
+      if (mixed) {
+        const den = Number(mixed[2])
+        if (den === 0) return null
+        value += Number(mixed[1]) / den
+        rest = rest.slice(mixed[0].length)
+      }
+    }
+
+    const unit = rest.match(UNIT)
+    if (unit) {
+      const perUnit = INPUT_UNIT_MM[unit[1].toLowerCase()]
+      if (perUnit === undefined) return null
+      tokens.push({ kind: 'num', value: value * perUnit, mm: true })
+      rest = rest.slice(unit[0].length)
+    } else {
+      tokens.push({ kind: 'num', value, mm: false })
     }
   }
-  flush()
-
   return tokens
 }
 
-/**
- * Evaluate a token sequence with the usual precedence: `*` and `/` bind
- * tighter than `+` and `-`, so `25 5/8 - 3 * 1/2` is `25 5/8 - 1 1/2`. Each
- * product starts from a measurement and is scaled by plain numbers. A leading
- * operator starts from `currentMm`, the box's existing value, so `+3` adds to
- * what's already there and `/2` halves it. Returns null if any operand fails to
- * parse.
- */
-function foldExpression(tokens: Token[], currentMm: number, defaultUnit: Unit): number | null {
-  let i = 0
-
-  // A measurement operand: the start of every product.
-  const measurement = (): number | null => {
-    const t = tokens[i]
-    if (!t || !('term' in t)) return null
-    i++
-    return parseMeasurement(t.term, defaultUnit)
-  }
-
-  // `start` scaled by any run of `* n` / `/ n` that follows it.
-  const product = (start: number | null): number | null => {
-    let acc = start
-    while (acc !== null && i < tokens.length) {
-      const opToken = tokens[i]
-      if (!('op' in opToken) || (opToken.op !== '*' && opToken.op !== '/')) break
-      const termToken = tokens[i + 1]
-      if (!termToken || !('term' in termToken)) return null
-      const n = parseNumeric(termToken.term) // `*` / `/` take a plain scalar
-      if (n === null || (opToken.op === '/' && n === 0)) return null
-      acc = opToken.op === '*' ? acc * n : acc / n
-      i += 2
-    }
-    return acc
-  }
-
-  let total = product('op' in tokens[0] ? currentMm : measurement())
-  while (total !== null && i < tokens.length) {
-    const opToken = tokens[i++]
-    if (!('op' in opToken)) return null
-    const next = product(measurement())
-    if (next === null) return null
-    total = opToken.op === '+' ? total + next : total - next
-  }
-  return total
+/** One measurement on its own, maybe negative or in feet and inches — no
+ *  arithmetic. */
+function isPlain(tokens: Token[]): boolean {
+  const body = tokens[0]?.kind === 'op' && tokens[0].op === '-' ? tokens.slice(1) : tokens
+  return body.length > 0 && body.every((t) => t.kind === 'num')
 }
 
-function parseNumeric(part: string): number | null {
-  const text = part.trim()
+/** A value while evaluating: a length in mm, or a plain number. */
+interface Value {
+  value: number
+  mm: boolean
+}
 
-  const mixed = text.match(/^(-?\d+(?:\.\d+)?)\s+(\d+)\/(\d+)$/) // "23 3/4"
-  if (mixed) {
-    const whole = parseFloat(mixed[1])
-    const den = Number(mixed[3])
-    if (den === 0) return null
-    const sign = whole < 0 ? -1 : 1
-    return whole + sign * (Number(mixed[2]) / den)
+/**
+ * Evaluate tokens by recursive descent — `sum` of `product`s of `factor`s —
+ * and turn the result into mm. Null on a syntax error, a division by zero, or
+ * a length times / over a length.
+ */
+function evaluate(tokens: Token[], defaultUnit: Unit): number | null {
+  let i = 0
+  const peek = () => tokens[i]
+  const toMm = (v: Value): number => (v.mm ? v.value : v.value * MM_PER_UNIT[defaultUnit])
+
+  const sum = (): Value | null => {
+    let left = product()
+    while (left) {
+      const t = peek()
+      if (t?.kind !== 'op' || (t.op !== '+' && t.op !== '-')) break
+      i++
+      const right = product()
+      if (!right) return null
+      const sign = t.op === '+' ? 1 : -1
+      // Plain numbers add as plain numbers; once a length is involved, the
+      // plain side is in the box's unit.
+      left =
+        left.mm || right.mm
+          ? { value: toMm(left) + sign * toMm(right), mm: true }
+          : { value: left.value + sign * right.value, mm: false }
+    }
+    return left
   }
 
-  const fraction = text.match(/^(-?\d+)\/(\d+)$/) // "3/4"
-  if (fraction) {
-    const den = Number(fraction[2])
-    return den === 0 ? null : Number(fraction[1]) / den
+  const product = (): Value | null => {
+    let left = factor()
+    while (left) {
+      const t = peek()
+      if (t?.kind !== 'op' || (t.op !== '*' && t.op !== '/')) break
+      i++
+      const right = factor()
+      // A length scales by a number; a length times a length isn't one.
+      if (!right || (left.mm && right.mm)) return null
+      if (t.op === '/' && right.value === 0) return null
+      left = { value: t.op === '*' ? left.value * right.value : left.value / right.value, mm: left.mm || right.mm }
+    }
+    return left
   }
 
-  return /^-?\d+(?:\.\d+)?$/.test(text) ? parseFloat(text) : null
+  const factor = (): Value | null => {
+    const t = peek()
+    if (!t) return null
+    if (t.kind === 'op' && (t.op === '-' || t.op === '+')) {
+      i++
+      const inner = factor()
+      return inner && { ...inner, value: t.op === '-' ? -inner.value : inner.value }
+    }
+    if (t.kind === 'paren' && t.open) {
+      i++
+      const inner = sum()
+      const close = peek()
+      if (!inner || close?.kind !== 'paren' || close.open) return null
+      i++
+      return inner
+    }
+    if (t.kind === 'num') {
+      i++
+      // Lengths side by side add up: `5' 3"`.
+      let value: Value = { value: t.value, mm: t.mm }
+      while (value.mm) {
+        const next = peek()
+        if (next?.kind !== 'num' || !next.mm) break
+        value = { value: value.value + next.value, mm: true }
+        i++
+      }
+      return value
+    }
+    return null
+  }
+
+  const result = sum()
+  if (!result || i !== tokens.length) return null
+  const mm = toMm(result)
+  return Number.isFinite(mm) ? mm : null
 }
 
 /** Format a millimetre value for display in the given unit. Inches render as
