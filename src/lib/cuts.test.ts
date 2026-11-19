@@ -219,6 +219,24 @@ describe('reading joints back for the editor', () => {
     expect(readCorner(cut)?.id).toBe('rp')
   })
 
+  it("keeps a panel set in grooves apart from the corner it only grazes", () => {
+    // A table corner in 3" stock, with a 3/4" side panel let into the leg and
+    // the top rail along their length: it reaches into the corner by a
+    // sliver at the top of the leg, but that's not the corner joint.
+    const leg = panel({ id: 'leg', normal: 'x', length: 76.2, width: 863.6, thickness: 76.2, position: [-44.45, 466.725, 0] })
+    const top = panel({ id: 'top', normal: 'y', length: 863.6, width: 76.2, thickness: 76.2, position: [349.25, 860.425, 0] })
+    const front = panel({ id: 'front', normal: 'y', length: 76.2, width: 863.6, thickness: 76.2, position: [-44.45, 860.425, -393.7] })
+    const side = panel({ id: 'side', normal: 'z', length: 800.1, width: 733.425, thickness: 19.05, position: [379.975, 468.675, -28.575] })
+    const all = [leg, top, front, side]
+    const ids = (a: Panel, b: Panel) => jointGroup(all, a, b).map((p) => p.id)
+    expect(ids(leg, top)).toEqual(['leg', 'top', 'front'])
+    expect(ids(side, leg)).toEqual(['side', 'leg'])
+    expect(ids(side, top)).toEqual(['side', 'top'])
+    // Where the side's corner pokes into the front rail, all four claim the
+    // same small block: that spot is a joint of four.
+    expect(ids(side, front)).toEqual(['side', 'front', 'leg', 'top'])
+  })
+
   it('says who keeps the overlap in words', () => {
     const side = panel({ id: 'ds', name: 'Side', normal: 'x', length: 300, width: 700, position: [0, 350, 150] })
     const shelf = panel({ id: 'dh', name: 'Shelf', normal: 'y', length: 500, width: 300, position: [253, 300, 150] })

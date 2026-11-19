@@ -244,22 +244,20 @@ export function readCorner(parts: Panel[]): Panel | null {
 
 /**
  * Every part in the joint where `a` and `b` meet: the two of them and any
- * other visible part that runs into the same spot (into the wood `a` and `b`
- * share, and into each of them). Three posts meeting at a corner are one
- * joint of three parts, wherever it's opened from.
+ * other visible part that fills most of the same spot — at least half of the
+ * wood `a` and `b` share. Three posts meeting at a corner are one joint of
+ * three parts, wherever it's opened from; a panel set in a groove along a leg
+ * only grazes the corner at the leg's top, so it's a joint of its own there.
  */
 export function jointGroup(panels: Panel[], a: Panel, b: Panel): Panel[] {
   const joint = sharedBox(a, b)
   if (!joint) return [a, b]
-  const others = panels.filter(
-    (c) =>
-      c.id !== a.id &&
-      c.id !== b.id &&
-      !c.hidden &&
-      sharedBox(a, c) !== null &&
-      sharedBox(b, c) !== null &&
-      intersectBounds(joint, panelBounds(c)) !== null,
-  )
+  const volume = (box: Bounds) => extent(box, 0) * extent(box, 1) * extent(box, 2)
+  const others = panels.filter((c) => {
+    if (c.id === a.id || c.id === b.id || c.hidden) return false
+    const inside = intersectBounds(joint, panelBounds(c))
+    return inside !== null && volume(inside) >= volume(joint) / 2
+  })
   return [a, b, ...others]
 }
 

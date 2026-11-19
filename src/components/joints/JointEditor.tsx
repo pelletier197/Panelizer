@@ -34,7 +34,7 @@ type Vec3 = [number, number, number]
 
 /** One colour per part, so each piece reads as itself in the close-up and its
  *  button says which one it is. */
-const PART_COLORS = ['#5b8def', '#f0a03c', '#45b97c']
+const PART_COLORS = ['#5b8def', '#f0a03c', '#45b97c', '#d9608f', '#9b7be0', '#3cbcc4', '#e0574a', '#d6c13f']
 
 /** The ways a split can run, by the halves each part ends up with. */
 const SPLITS: { axis: 0 | 1 | 2; label: string }[] = [
