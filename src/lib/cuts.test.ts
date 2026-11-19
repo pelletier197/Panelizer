@@ -205,6 +205,40 @@ describe('explodeOffsets: pulling a joint apart to show its pieces', () => {
     expect(offsets.get('eh')![0]).toBeGreaterThan(0)
     expect(offsets.get('es')![0]).toBeLessThan(0)
   })
+
+  // Every piece moved by its offset: no two may still share wood.
+  const sharesWood = (panels: Panel[], ids: string[]) => {
+    const solids = panelSolids(panels)
+    const offsets = explodeOffsets(panels, ids, solids)
+    const moved = ids.map((id) =>
+      solids.get(id)!.map((b) => {
+        const o = offsets.get(id)!
+        return box(b.min.map((v, k) => v + o[k]) as [number, number, number], b.max.map((v, k) => v + o[k]) as [number, number, number])
+      }),
+    )
+    return moved.some((a, i) =>
+      moved.slice(i + 1).some((b) => a.some((x) => b.some((y) => intersectBounds(x, y) !== null))),
+    )
+  }
+
+  it('pulls an uncut corner of thick posts far enough apart that nothing overlaps', () => {
+    // Three 76 mm posts meeting at a corner, nothing cut: the overlap is as
+    // deep as the posts are thick.
+    const up = panel({ id: 'cu', normal: 'z', length: 76, width: 800, thickness: 76, position: [38, 400, 38] })
+    const along = panel({ id: 'ca', normal: 'y', length: 800, width: 76, thickness: 76, position: [400, 38, 38] })
+    const back = panel({ id: 'cb', normal: 'x', length: 800, width: 76, thickness: 76, position: [38, 38, 400] })
+    expect(sharesWood([up, along, back], ['cu', 'ca', 'cb'])).toBe(false)
+  })
+
+  it('pulls an uncut pair apart, and a long dado no further than its middle size calls for', () => {
+    const side = panel({ id: 'us', normal: 'x', length: 300, width: 700, position: [0, 350, 150] })
+    const shelf = panel({ id: 'uh', normal: 'y', length: 500, width: 300, position: [240, 300, 150] })
+    const panels = [side, shelf]
+    expect(sharesWood(panels, ['us', 'uh'])).toBe(false)
+    // The joint is 300 long but only 18 by 9 across; the pieces stay close.
+    const offsets = explodeOffsets(panels, ['us', 'uh'], panelSolids(panels))
+    expect(Math.hypot(...offsets.get('uh')!)).toBeLessThan(100)
+  })
 })
 
 describe('reading joints back for the editor', () => {
