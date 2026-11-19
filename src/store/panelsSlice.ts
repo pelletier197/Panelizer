@@ -4,6 +4,7 @@ import type { PanelPatch } from '../lib/resize'
 import { rotatePanels } from '../lib/rotate'
 import { findMaterial } from '../lib/materials'
 import { dropCutsBy } from '../lib/cuts'
+import { mirroredCopies } from '../lib/mirror'
 import type { Slice } from './types'
 
 /** How far (mm, along X) a duplicate or paste lands from its source, so the
@@ -46,6 +47,10 @@ export interface PanelsSlice {
    *  2=Z), as a group around its centre, in one undo step. `dir` 1 is
    *  counter-clockwise looking down the axis, −1 the other way. */
   rotateSelection: (about: 0 | 1 | 2, dir: 1 | -1) => void
+  /** Add mirrored copies of the selection, reflected through the face of its
+   *  combined box on `side` of world axis `axis` so they land right against
+   *  it, and select them — one undo step. */
+  mirrorSelection: (axis: 0 | 1 | 2, side: 1 | -1) => void
   /** Panels copied with Ctrl+C, as they were at copy time. In-app only (not
    *  the system clipboard), transient, and never undone. */
   clipboard: Panel[]
@@ -59,13 +64,14 @@ export interface PanelsSlice {
 }
 
 export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPanels, applyPatches }) => {
-  // Add fresh copies of `sources`, shifted along X by `offset` mm, and select
-  // them — one undo step. Shared by duplicate and paste. A copy whose material
+  // Add fresh copies of `sources`, each already placed where its copy goes
+  // (ids still the originals'), and select them — one undo step. Shared by
+  // duplicate, paste and mirror. A copy whose material
   // was deleted since it was copied falls back to the first material. A cut
   // made by a panel copied along with it points at that panel's copy, so a
   // copied joint stays a joint; one made by a panel left behind still points
   // at it.
-  const addCopies = (sources: Panel[], offset: number) => {
+  const addCopies = (sources: Panel[]) => {
     if (sources.length === 0) return
     const { materials } = get()
     const made = sources.map((source) =>
@@ -73,7 +79,6 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
         ...source,
         name: `${source.name} copy`,
         materialId: findMaterial(materials, source.materialId).id,
-        position: [source.position[0] + offset, source.position[1], source.position[2]],
       }),
     )
     const copyOf = new Map(sources.map((source, i) => [source.id, made[i].id]))
@@ -82,6 +87,10 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
     )
     commit({ panels: [...get().panels, ...copies], selectedIds: copies.map((c) => c.id) })
   }
+
+  // Shifted along X by `offset` mm.
+  const shifted = (sources: Panel[], offset: number): Panel[] =>
+    sources.map((p) => ({ ...p, position: [p.position[0] + offset, p.position[1], p.position[2]] }))
 
   return {
     clipboard: [],
@@ -160,12 +169,17 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
 
     duplicatePanels: (ids) => {
       const wanted = new Set(ids)
-      addCopies(get().panels.filter((p) => wanted.has(p.id)), COPY_OFFSET)
+      addCopies(shifted(get().panels.filter((p) => wanted.has(p.id)), COPY_OFFSET))
     },
 
     rotateSelection: (about, dir) => {
       const chosen = new Set(get().selectedIds)
       get().commitPanelPatches(rotatePanels(get().panels.filter((p) => chosen.has(p.id)), about, dir))
+    },
+
+    mirrorSelection: (axis, side) => {
+      const chosen = new Set(get().selectedIds)
+      addCopies(mirroredCopies(get().panels.filter((p) => chosen.has(p.id)), axis, side))
     },
 
     copySelection: () => {
@@ -178,7 +192,7 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
     paste: () => {
       const { clipboard, pasteCount } = get()
       if (clipboard.length === 0) return
-      addCopies(clipboard, COPY_OFFSET * (pasteCount + 1))
+      addCopies(shifted(clipboard, COPY_OFFSET * (pasteCount + 1)))
       set({ pasteCount: pasteCount + 1 })
     },
   }

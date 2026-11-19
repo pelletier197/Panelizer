@@ -5,6 +5,7 @@ import { isAutoGrain } from '../../lib/panel'
 import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
+import { mirroredCopies } from '../../lib/mirror'
 import { SIDE_NAMES, axisField } from '../../lib/geometry'
 import { CORNER_SIGNS } from '../../lib/rounding'
 import { MeasurementInput } from '../ui/MeasurementInput'
@@ -85,6 +86,17 @@ function RotateIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <path d="M21 4v4h-4" />
+    </svg>
+  )
+}
+
+/** Two halves either side of a dashed line. */
+function MirrorIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v3M12 10v4M12 18v3" />
+      <path d="M8 6 3 18h5z" />
+      <path d="M16 6l5 12h-5z" />
     </svg>
   )
 }
@@ -180,6 +192,7 @@ export function PropertiesPanel() {
   const removePanels = useDesignStore((s) => s.removePanels)
   const duplicatePanels = useDesignStore((s) => s.duplicatePanels)
   const rotateSelection = useDesignStore((s) => s.rotateSelection)
+  const mirrorSelection = useDesignStore((s) => s.mirrorSelection)
   const patchPanelsLive = useDesignStore((s) => s.patchPanelsLive)
   const commitPanelPatches = useDesignStore((s) => s.commitPanelPatches)
   const restorePanels = useDesignStore((s) => s.restorePanels)
@@ -190,18 +203,23 @@ export function PropertiesPanel() {
   // Shift flips a rotate button's direction, on click and in its preview.
   const shiftHeld = useDesignStore((s) => s.boxKeyHeld)
   const [hoveredTurn, setHoveredTurn] = useState<0 | 1 | 2 | null>(null)
+  const [hoveredMirror, setHoveredMirror] = useState<0 | 1 | 2 | null>(null)
 
   // While a rotate button is hovered, ghost the selection where that turn
   // would put it. Recomputed after a click too, so the ghost always shows the
   // *next* turn, and cleared when the pointer leaves or the panel unmounts.
   useEffect(() => {
+    if (hoveredMirror !== null && selected.length > 0) {
+      setRotatePreview(mirroredCopies(selected, hoveredMirror, shiftHeld ? -1 : 1))
+      return
+    }
     if (hoveredTurn === null || selected.length === 0) {
       setRotatePreview([])
       return
     }
     const patches = new Map(rotatePanels(selected, hoveredTurn, shiftHeld ? -1 : 1).map((x) => [x.id, x.patch]))
     setRotatePreview(selected.map((p) => ({ ...p, ...patches.get(p.id) })))
-  }, [hoveredTurn, shiftHeld, selected, setRotatePreview])
+  }, [hoveredTurn, hoveredMirror, shiftHeld, selected, setRotatePreview])
   useEffect(() => () => setRotatePreview([]), [setRotatePreview])
 
   if (selected.length === 0) {
@@ -372,6 +390,27 @@ export function PropertiesPanel() {
               <RotateIcon /> {label}
               {/* R turns around the vertical, so only the Y button has a key. */}
               {label === 'Y' && <Kbd keys={KEYS.rotate} />}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* A mirrored copy lands against the selection's far side (Shift: near
+          side), like the other half of a symmetric piece. */}
+      <div className="flex items-center gap-2 py-[3px]">
+        <span className="text-small w-20 shrink-0 text-ink-dim">Mirror</span>
+        <div className="flex flex-1 gap-1" role="group" aria-label="Mirrored copy">
+          {(['X', 'Y', 'Z'] as const).map((label, axis) => (
+            <Button
+              key={label}
+              size="sm"
+              className="flex-1"
+              title={`Add a mirrored copy across ${label} · Shift+click puts it on the other side`}
+              onClick={(e) => mirrorSelection(axis as 0 | 1 | 2, e.shiftKey ? -1 : 1)}
+              onMouseEnter={() => setHoveredMirror(axis as 0 | 1 | 2)}
+              onMouseLeave={() => setHoveredMirror(null)}
+            >
+              <MirrorIcon /> {label}
             </Button>
           ))}
         </div>
