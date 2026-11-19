@@ -167,8 +167,12 @@ export function setThreeWay(post: Panel, rails: [Panel, Panel]): PanelPatch[] {
  * How far to pull each panel of a joint away from it so its pieces can be
  * seen apart (mm, per panel id): out from the joint, towards the side where
  * each one keeps its wood near the joint — the top half of a lap goes up, a
- * shelf comes out of its dado, a post drops away from the rails it held. The
- * gap grows with the joint, so small joints and big ones both read.
+ * shelf comes out of its dado, a post drops away from the rails it held.
+ *
+ * All pieces move the same distance, far enough that none still shares wood
+ * with another (a joint left uncut is as deep as the parts are thick), plus a
+ * gap that grows with the joint's middle size — not its longest, or a long
+ * dado would fling its parts across the room.
  */
 export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<string, Bounds[]>): Map<string, Vec3> {
   const parts = ids.map((id) => panels.find((p) => p.id === id)).filter((p): p is Panel => p !== undefined)
@@ -185,14 +189,15 @@ export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<strin
     min: [0, 1, 2].map((k) => Math.min(...shared.map((b) => b.min[k]))) as Vec3,
     max: [0, 1, 2].map((k) => Math.max(...shared.map((b) => b.max[k]))) as Vec3,
   }
-  const size = Math.max(...[0, 1, 2].map((k) => extent(joint, k)))
+  const extents = [0, 1, 2].map((k) => extent(joint, k)).sort((a, b) => a - b)
+  const size = extents[2]
   const centre = [0, 1, 2].map((k) => (joint.min[k] + joint.max[k]) / 2)
   // Near the joint: the joint box grown by its own size every way.
   const near: Bounds = {
     min: joint.min.map((v) => v - size) as Vec3,
     max: joint.max.map((v) => v + size) as Vec3,
   }
-  const gap = size * 0.75 + 10
+  const gap = extents[1] * 0.75 + 10
 
   // Which way a panel's wood in `region` lies from the joint's centre, as a
   // unit vector, or zeros when it has none there or it's centred.
@@ -211,7 +216,7 @@ export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<strin
     return length > 1e-6 ? dir.map((d) => d / length) : [0, 0, 0]
   }
 
-  for (const panel of parts) {
+  const directions = parts.map((panel) => {
     // Mostly the side it keeps inside the joint (the top half of a lap), then
     // the way it runs off from the joint (a shelf out of its dado).
     const inside = lean(panel, joint)
@@ -219,9 +224,48 @@ export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<strin
     let dir = inside.map((d, k) => d + around[k] / 2)
     if (Math.hypot(...dir) < 1e-6) dir = panel.position.map((p, k) => p - centre[k])
     const length = Math.hypot(...dir)
-    offsets.set(panel.id, length < 1e-6 ? [0, 0, 0] : (dir.map((d) => (d / length) * gap) as Vec3))
+    return (length < 1e-6 ? [0, 0, 0] : dir.map((d) => d / length)) as Vec3
+  })
+
+  // How far they must all move for no two to share wood any more. Pieces
+  // heading the same way may never part; past a few gaps, give up on them.
+  let clear = 0
+  for (let i = 0; i < parts.length; i++) {
+    for (let j = i + 1; j < parts.length; j++) {
+      const away = directions[i].map((d, k) => d - directions[j][k]) as Vec3
+      for (const a of solids.get(parts[i].id) ?? [panelBounds(parts[i])]) {
+        for (const b of solids.get(parts[j].id) ?? [panelBounds(parts[j])]) {
+          clear = Math.max(clear, partedAt(a, b, away))
+        }
+      }
+    }
   }
+  const distance = Math.min(clear, gap * 6) + gap
+
+  parts.forEach((panel, i) =>
+    offsets.set(panel.id, directions[i].map((d) => d * distance) as Vec3),
+  )
   return offsets
+}
+
+/**
+ * How far along `away` (box `a`'s motion relative to `b`, per unit of travel)
+ * `a` has to go before it no longer overlaps `b`. 0 if they don't overlap to
+ * begin with, and 0 for a pair that never parts (no relative motion), since no
+ * distance would help.
+ */
+function partedAt(a: Bounds, b: Bounds, away: Vec3): number {
+  const overlapping = [0, 1, 2].every((k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > 0.01)
+  if (!overlapping) return 0
+  // They part as soon as they part along any one axis.
+  let soonest = Infinity
+  for (const k of [0, 1, 2]) {
+    const r = away[k]
+    if (Math.abs(r) < 1e-6) continue
+    const need = r > 0 ? b.max[k] - a.min[k] : a.max[k] - b.min[k]
+    soonest = Math.min(soonest, need / Math.abs(r))
+  }
+  return Number.isFinite(soonest) ? soonest : 0
 }
 
 /**
