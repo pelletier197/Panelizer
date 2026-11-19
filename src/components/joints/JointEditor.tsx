@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Edges, Html, OrbitControls } from '@react-three/drei'
-import { BoxGeometry, type Group } from 'three'
+import { BoxGeometry, type Group, type PerspectiveCamera } from 'three'
 import type { Cut, Panel } from '../../types/panel'
 import type { Bounds } from '../../lib/bounds'
 import type { PanelPatch } from '../../lib/resize'
@@ -457,9 +457,11 @@ function PairList({
 }
 
 /**
- * The parts up close, in their colours and as they'd be cut, pulled a little
- * apart from the joint (or put together, to see them fitted). Turn it with
+ * The parts up close, in their colours and as they'd be cut, fitted together
+ * (or pulled a little apart from the joint, to see each piece). Turn it with
  * the mouse or a finger; the joint's outline stays where the parts overlap.
+ * The camera frames the joint itself, and backs off to fit the pieces while
+ * they're apart.
  */
 function CloseUp({
   parts,
@@ -472,7 +474,7 @@ function CloseUp({
   color: (p: Panel) => string
   focus: string[] | null
 }) {
-  const [apart, setApart] = useState(true)
+  const [apart, setApart] = useState(false)
   const paint = palette()
 
   const scene = useMemo(() => {
@@ -506,15 +508,19 @@ function CloseUp({
         offset: offsets.get(p.id) ?? ([0, 0, 0] as Vec3),
       }
     })
-    // How far from the joint the pulled-apart pieces reach, for the camera.
-    const radius = size / 2 + Math.max(0, ...pieces.map((p) => Math.hypot(...p.offset))) + 30
-    return { centre, joint, radius, pieces }
+    // What the camera fits: the joint itself with a little wood around it
+    // when together, out to the pulled-apart pieces when apart.
+    const half = Math.hypot(...[0, 1, 2].map((k) => joint.max[k] - joint.min[k])) / 2
+    const together = half * 1.6 + 10
+    const apart = together + Math.max(0, ...pieces.map((p) => Math.hypot(...p.offset)))
+    return { centre, joint, together, apart, pieces }
   }, [parts, all])
 
   return (
     <div className="relative h-72 min-w-0 shrink-0 bg-bg md:h-auto md:min-h-[26rem] md:flex-1">
       {scene && (
-        <Canvas dpr={[1, 2]} camera={{ fov: 35, near: 0.001, far: 50, position: cameraStart(scene.radius) }}>
+        <Canvas dpr={[1, 2]} camera={{ fov: 35, near: 0.001, far: 50, position: cameraStart(scene.together) }}>
+          <CameraFit radius={apart ? scene.apart : scene.together} />
           <ambientLight intensity={0.7} />
           <HeadLight intensity={1.6} />
           {/* The scene is moved so the joint sits on the origin, where the
@@ -555,6 +561,30 @@ function CloseUp({
 function cameraStart(radius: number): Vec3 {
   const d = (radius * 3.6) / 1000
   return [d * 0.6, d * 0.5, d * 0.62]
+}
+
+/** Eases the camera in or out along its line of sight until everything
+ *  within `radius` (mm) of the joint fits, whenever `radius` changes. It then
+ *  lets go, so zooming by hand isn't fought. */
+function CameraFit({ radius }: { radius: number }) {
+  const camera = useThree((s) => s.camera) as PerspectiveCamera
+  const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height))
+  const goal = useRef<number | null>(null)
+  useEffect(() => {
+    // Fit the sphere in the narrower of the two fields of view, so a tall,
+    // thin view (a phone) doesn't crop the sides.
+    const vertical = (camera.fov * Math.PI) / 360
+    const horizontal = Math.atan(Math.tan(vertical) * aspect)
+    goal.current = radius / 1000 / Math.sin(Math.min(vertical, horizontal))
+  }, [radius, aspect, camera])
+  useFrame((_, delta) => {
+    if (goal.current === null) return
+    const now = camera.position.length()
+    const next = now + (goal.current - now) * Math.min(1, delta * 8)
+    camera.position.setLength(next)
+    if (Math.abs(next - goal.current) < goal.current * 0.002) goal.current = null
+  })
+  return null
 }
 
 /** One part in the close-up: its own colour, sliding to its spot. */
