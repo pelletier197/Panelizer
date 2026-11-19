@@ -434,9 +434,8 @@ export function PropertiesPanel() {
       </div>
 
       {/* Same gap between every part along an axis, the outermost two
-          staying put. Only with three or more parts; an axis they can't be
-          spaced along (they overlap along it, or already are) is greyed out
-          and says why. */}
+          staying put. Only with three or more parts; an axis they're already
+          evenly spaced along is greyed out and says so. */}
       {selected.length >= 3 && (
         <div className="flex items-center gap-2 py-[3px]">
           <span className="text-small w-20 shrink-0 text-ink-dim">Distribute</span>

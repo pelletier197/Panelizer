@@ -20,8 +20,8 @@ modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
 encloses, right→left touches, with a live preview). Still open:
 
 - **Align faces** on an axis. (Distribute is done: `lib/arrange.ts`, a
-  Distribute X / Y / Z row for three or more parts; an axis they overlap along,
-  or are already evenly spaced along, is greyed out with the reason.)
+  Distribute X / Y / Z row for three or more parts: equal edge-to-edge gaps,
+  or equal centre spacing where they don't fit side by side.)
 - **Select similar** (same material / same size / same part group).
 
 No data-model change anywhere in this section.

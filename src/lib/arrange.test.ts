@@ -34,6 +34,14 @@ describe('distributePanels', () => {
   it('needs three parts', () => {
     expect(distributePanels([shelf(0), shelf(100)], 1)).toEqual([])
   })
+
+  it("spaces centres evenly when the parts don't fit side by side", () => {
+    // Three 600-long shelves along X with centres 0, 100, 700: they overlap,
+    // so the middle one goes halfway between the outer centres.
+    const parts = [shelf(9, { position: [0, 9, 0] }), shelf(9, { position: [100, 9, 0] }), shelf(9, { position: [700, 9, 0] })]
+    const [{ patch }] = distributePanels(parts, 0)
+    expect(patch.position![0]).toBeCloseTo(350)
+  })
 })
 
 describe('cantDistribute', () => {
@@ -42,8 +50,11 @@ describe('cantDistribute', () => {
     expect(cantDistribute([shelf(9), top, shelf(100)], 1)).toBeNull()
   })
 
-  it('refuses an axis the parts overlap along', () => {
-    expect(cantDistribute([shelf(9), shelf(891), shelf(100)], 0)).toMatch(/overlap along X/)
+  it('allows parts that overlap along the axis', () => {
+    // Two at the same height and one above: nothing to spread at 0..18, but
+    // offset sideways they can still be spread along X.
+    const parts = [shelf(9, { position: [0, 9, 0] }), shelf(9, { position: [100, 9, 0] }), shelf(9, { position: [700, 9, 0] })]
+    expect(cantDistribute(parts, 0)).toBeNull()
   })
 
   it('refuses parts already evenly spaced', () => {
