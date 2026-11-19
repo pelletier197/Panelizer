@@ -47,8 +47,17 @@ function useNesting(enabled: boolean, ...args: Parameters<typeof generateCutlist
   const worker = useRef<Worker | null | undefined>(undefined)
   const latest = useRef(0)
 
-  // The worker is started on first use and stopped with the component.
-  useEffect(() => () => worker.current?.terminate(), [])
+  // The worker is started on first use and stopped with the component. The
+  // ref is cleared with it, so a component mounted again (as StrictMode does
+  // in development) starts a fresh worker rather than posting to a stopped
+  // one, which never answers.
+  useEffect(
+    () => () => {
+      worker.current?.terminate()
+      worker.current = undefined
+    },
+    [],
+  )
 
   const [panels, materials, stocks, kerf, margin, options] = args
   const style = options?.style
