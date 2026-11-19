@@ -5,7 +5,7 @@ import { rotatePanels } from '../lib/rotate'
 import { findMaterial } from '../lib/materials'
 import { dropCutsBy } from '../lib/cuts'
 import { mirroredCopies } from '../lib/mirror'
-import { distributeAxis, distributePanels } from '../lib/arrange'
+import { cantDistribute, distributePanels } from '../lib/arrange'
 import type { Slice } from './types'
 
 /** How far (mm, along X) a duplicate or paste lands from its source, so the
@@ -52,9 +52,9 @@ export interface PanelsSlice {
    *  combined box on `side` of world axis `axis` so they land right against
    *  it, and select them — one undo step. */
   mirrorSelection: (axis: 0 | 1 | 2, side: 1 | -1) => void
-  /** Space the selection evenly along the axis it sits in a row along (see
-   *  `distributeAxis`), the outermost two staying put — one undo step. */
-  distributeSelection: () => void
+  /** Space the selection evenly along world `axis`, the outermost two staying
+   *  put — one undo step. Does nothing if it can't (see `cantDistribute`). */
+  distributeSelection: (axis: 0 | 1 | 2) => void
   /** Panels copied with Ctrl+C, as they were at copy time. In-app only (not
    *  the system clipboard), transient, and never undone. */
   clipboard: Panel[]
@@ -189,11 +189,10 @@ export const panelsSlice: Slice<PanelsSlice> = (set, get, { commit, live, mapPan
       addCopies(mirroredCopies(get().panels.filter((p) => chosen.has(p.id)), axis, side))
     },
 
-    distributeSelection: () => {
+    distributeSelection: (axis) => {
       const chosen = new Set(get().selectedIds)
       const selected = get().panels.filter((p) => chosen.has(p.id))
-      const axis = distributeAxis(selected)
-      if (axis !== null) get().commitPanelPatches(distributePanels(selected, axis))
+      if (cantDistribute(selected, axis) === null) get().commitPanelPatches(distributePanels(selected, axis))
     },
 
     copySelection: () => {

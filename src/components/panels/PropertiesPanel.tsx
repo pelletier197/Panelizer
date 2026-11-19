@@ -6,7 +6,7 @@ import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
 import { mirroredCopies } from '../../lib/mirror'
-import { distributeAxis, distributePanels } from '../../lib/arrange'
+import { cantDistribute, distributePanels } from '../../lib/arrange'
 import { SIDE_NAMES, axisField } from '../../lib/geometry'
 import { CORNER_SIGNS } from '../../lib/rounding'
 import { MeasurementInput } from '../ui/MeasurementInput'
@@ -98,6 +98,15 @@ function MirrorIcon() {
       <path d="M12 3v3M12 10v4M12 18v3" />
       <path d="M8 6 3 18h5z" />
       <path d="M16 6l5 12h-5z" />
+    </svg>
+  )
+}
+
+/** Three bars with equal gaps. */
+function DistributeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 4v16M12 7v10M20 4v16" />
     </svg>
   )
 }
@@ -206,16 +215,14 @@ export function PropertiesPanel() {
   const shiftHeld = useDesignStore((s) => s.boxKeyHeld)
   const [hoveredTurn, setHoveredTurn] = useState<0 | 1 | 2 | null>(null)
   const [hoveredMirror, setHoveredMirror] = useState<0 | 1 | 2 | null>(null)
-  const [hoveredSpace, setHoveredSpace] = useState(false)
-  // The axis the selection can be spaced evenly along, if any.
-  const spaceAxis = distributeAxis(selected)
+  const [hoveredSpace, setHoveredSpace] = useState<0 | 1 | 2 | null>(null)
 
   // While a rotate button is hovered, ghost the selection where that turn
   // would put it. Recomputed after a click too, so the ghost always shows the
   // *next* turn, and cleared when the pointer leaves or the panel unmounts.
   useEffect(() => {
-    if (hoveredSpace && spaceAxis !== null) {
-      const moved = new Map(distributePanels(selected, spaceAxis).map((x) => [x.id, x.patch]))
+    if (hoveredSpace !== null && cantDistribute(selected, hoveredSpace) === null) {
+      const moved = new Map(distributePanels(selected, hoveredSpace).map((x) => [x.id, x.patch]))
       setRotatePreview(selected.filter((p) => moved.has(p.id)).map((p) => ({ ...p, ...moved.get(p.id) })))
       return
     }
@@ -229,7 +236,7 @@ export function PropertiesPanel() {
     }
     const patches = new Map(rotatePanels(selected, hoveredTurn, shiftHeld ? -1 : 1).map((x) => [x.id, x.patch]))
     setRotatePreview(selected.map((p) => ({ ...p, ...patches.get(p.id) })))
-  }, [hoveredTurn, hoveredMirror, hoveredSpace, spaceAxis, shiftHeld, selected, setRotatePreview])
+  }, [hoveredTurn, hoveredMirror, hoveredSpace, shiftHeld, selected, setRotatePreview])
   useEffect(() => () => setRotatePreview([]), [setRotatePreview])
 
   if (selected.length === 0) {
@@ -321,29 +328,9 @@ export function PropertiesPanel() {
       title={single ? 'Panel' : `${selected.length} panels`}
       action={
         <div className="flex gap-1.5">
-          {/* Only offered when there's something to space: three or more parts
-              in a row, not evenly spaced yet. The axis is the row's. */}
-          {spaceAxis !== null && (
-            <Button
-              size="sm"
-              title={`Same gap between every part along ${'XYZ'[spaceAxis]} · the two outermost stay put`}
-              onClick={() => {
-                // The button goes away once the parts are spaced, so no
-                // mouseleave would clear the hover.
-                setHoveredSpace(false)
-                distributeSelection()
-              }}
-              onMouseEnter={() => setHoveredSpace(true)}
-              onMouseLeave={() => setHoveredSpace(false)}
-            >
-              Space evenly
-            </Button>
-          )}
           <Button size="sm" onClick={() => duplicatePanels(ids)}>
             Duplicate
-            {/* Room for Space evenly in a narrow sidebar; the shortcut stays
-                in the cheat sheet. */}
-            {spaceAxis === null && <Kbd keys={KEYS.duplicate} />}
+            <Kbd keys={KEYS.duplicate} />
           </Button>
           <Button size="sm" variant="danger" onClick={() => removePanels(ids)}>
             Delete
@@ -445,6 +432,42 @@ export function PropertiesPanel() {
           ))}
         </div>
       </div>
+
+      {/* Same gap between every part along an axis, the outermost two
+          staying put. Only with three or more parts; an axis they can't be
+          spaced along (they overlap along it, or already are) is greyed out
+          and says why. */}
+      {selected.length >= 3 && (
+        <div className="flex items-center gap-2 py-[3px]">
+          <span className="text-small w-20 shrink-0 text-ink-dim">Distribute</span>
+          <div className="flex flex-1 gap-1" role="group" aria-label="Distribute evenly">
+            {(['X', 'Y', 'Z'] as const).map((label, i) => {
+              const axis = i as 0 | 1 | 2
+              const why = cantDistribute(selected, axis)
+              return (
+                // The title sits on a wrapper: a disabled button shows none.
+                <span key={label} className="flex flex-1" title={why ?? `Same gap between every part along ${label} · the outermost two stay put`}>
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    disabled={why !== null}
+                    onClick={() => {
+                      // Once spaced, the button disables under the pointer
+                      // and no mouseleave comes to clear the ghost.
+                      setHoveredSpace(null)
+                      distributeSelection(axis)
+                    }}
+                    onMouseEnter={() => setHoveredSpace(axis)}
+                    onMouseLeave={() => setHoveredSpace(null)}
+                  >
+                    <DistributeIcon /> {label}
+                  </Button>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <FieldGroup title="Face" unit={UNIT_SUFFIX[unit]}>
         {measure('Length', length, 'length')}

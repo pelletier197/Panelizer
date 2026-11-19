@@ -19,9 +19,9 @@ shown as `Mixed`), duplicating a whole selection, `Ctrl+A` / `Ctrl+I` / `Esc`, a
 modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
 encloses, right→left touches, with a live preview). Still open:
 
-- **Align faces** on an axis. (Space evenly is done: `lib/arrange.ts`, offered
-  only when three or more selected parts sit in a row unevenly, along that
-  row's axis.)
+- **Align faces** on an axis. (Distribute is done: `lib/arrange.ts`, a
+  Distribute X / Y / Z row for three or more parts; an axis they overlap along,
+  or are already evenly spaced along, is greyed out with the reason.)
 - **Select similar** (same material / same size / same part group).
 
 No data-model change anywhere in this section.

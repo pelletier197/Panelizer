@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distributeAxis, distributePanels } from './arrange'
+import { cantDistribute, distributePanels } from './arrange'
 import type { Panel } from '../types/panel'
 
 let seq = 0
@@ -36,21 +36,21 @@ describe('distributePanels', () => {
   })
 })
 
-describe('distributeAxis', () => {
-  it('finds the axis the parts sit in a row along', () => {
-    expect(distributeAxis([shelf(9), shelf(891), shelf(100)])).toBe(1)
+describe('cantDistribute', () => {
+  it('allows the axis the parts sit in a row along, whatever their sizes', () => {
+    const top = shelf(882, { thickness: 36 }) // 864..900
+    expect(cantDistribute([shelf(9), top, shelf(100)], 1)).toBeNull()
   })
 
-  it('has nothing to do for parts already evenly spaced', () => {
-    expect(distributeAxis([shelf(9), shelf(450), shelf(891)])).toBeNull()
+  it('refuses an axis the parts overlap along', () => {
+    expect(cantDistribute([shelf(9), shelf(891), shelf(100)], 0)).toMatch(/overlap along X/)
   })
 
-  it('has nothing to do for parts that overlap along every axis', () => {
-    const side = shelf(450, { normal: 'x', length: 900, width: 900, position: [-300, 450, 0] })
-    expect(distributeAxis([side, shelf(9), shelf(100)])).toBeNull()
+  it('refuses parts already evenly spaced', () => {
+    expect(cantDistribute([shelf(9), shelf(450), shelf(891)], 1)).toMatch(/Already/)
   })
 
   it('needs three parts', () => {
-    expect(distributeAxis([shelf(0), shelf(100)])).toBeNull()
+    expect(cantDistribute([shelf(0), shelf(100)], 1)).toMatch(/three/)
   })
 })

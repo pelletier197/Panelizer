@@ -37,25 +37,20 @@ export function distributePanels(panels: Panel[], axis: AxisIndex): PanelPatch[]
 const TOL = 0.5
 
 /**
- * The world axis `panels` can be spaced evenly along, or null if none: one
- * where they sit in a row, each clear of the next, and aren't evenly spaced
- * already. With more than one, the longest row wins.
+ * Why `panels` can't be spaced evenly along world `axis`, or null if they
+ * can: there must be three or more, sitting in a row along it (each clear of
+ * the next), and not evenly spaced already. Parts of different sizes are
+ * fine — the gaps are measured edge to edge.
  */
-export function distributeAxis(panels: Panel[]): AxisIndex | null {
-  if (panels.length < 3) return null
-  let best: AxisIndex | null = null
-  let bestSpan = 0
-  for (const axis of [0, 1, 2] as AxisIndex[]) {
-    const boxes = panels.map((p) => panelBounds(p)).sort((a, b) => a.min[axis] + a.max[axis] - (b.min[axis] + b.max[axis]))
-    const inRow = boxes.every((b, i) => i === 0 || boxes[i - 1].max[axis] <= b.min[axis] + TOL)
-    if (!inRow) continue
-    const moves = distributePanels(panels, axis).some(({ id, patch }) => {
-      const before = panels.find((p) => p.id === id)!.position[axis]
-      return Math.abs(patch.position![axis] - before) > TOL
-    })
-    if (!moves) continue
-    const span = boxes[boxes.length - 1].max[axis] - boxes[0].min[axis]
-    if (span > bestSpan) [best, bestSpan] = [axis, span]
-  }
-  return best
+export function cantDistribute(panels: Panel[], axis: AxisIndex): string | null {
+  const letter = 'XYZ'[axis]
+  if (panels.length < 3) return 'Select three or more parts'
+  const boxes = panels.map((p) => panelBounds(p)).sort((a, b) => a.min[axis] + a.max[axis] - (b.min[axis] + b.max[axis]))
+  if (!boxes.every((b, i) => i === 0 || boxes[i - 1].max[axis] <= b.min[axis] + TOL))
+    return `They overlap along ${letter}, so they aren't in a row`
+  const moves = distributePanels(panels, axis).some(({ id, patch }) => {
+    const before = panels.find((p) => p.id === id)!.position[axis]
+    return Math.abs(patch.position![axis] - before) > TOL
+  })
+  return moves ? null : `Already evenly spaced along ${letter}`
 }
