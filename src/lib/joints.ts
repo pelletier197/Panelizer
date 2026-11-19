@@ -228,7 +228,8 @@ export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<strin
   })
 
   // How far they must all move for no two to share wood any more. Pieces
-  // heading the same way may never part; past a few gaps, give up on them.
+  // heading nearly the same way would have to go a long way: those are
+  // pushed apart below instead.
   let clear = 0
   for (let i = 0; i < parts.length; i++) {
     for (let j = i + 1; j < parts.length; j++) {
@@ -240,11 +241,42 @@ export function explodeOffsets(panels: Panel[], ids: string[], solids: Map<strin
       }
     }
   }
-  const distance = Math.min(clear, gap * 6) + gap
+  const distance = Math.min(clear, gap * 2) + gap
+  const moves = directions.map((dir) => dir.map((d) => d * distance) as Vec3)
 
-  parts.forEach((panel, i) =>
-    offsets.set(panel.id, directions[i].map((d) => d * distance) as Vec3),
-  )
+  // Any two still sharing wood — boards side by side, both running off the
+  // same way — are pushed apart along the axis they overlap least on, half
+  // each, until nothing overlaps.
+  const shifted = (box: Bounds, by: Vec3): Bounds => ({
+    min: box.min.map((v, k) => v + by[k]) as Vec3,
+    max: box.max.map((v, k) => v + by[k]) as Vec3,
+  })
+  const solidOf = (i: number) => solids.get(parts[i].id) ?? [panelBounds(parts[i])]
+  for (let round = 0; round < 50; round++) {
+    let pushed = false
+    for (let i = 0; i < parts.length; i++) {
+      for (let j = i + 1; j < parts.length; j++) {
+        for (const boxA of solidOf(i)) {
+          for (const boxB of solidOf(j)) {
+            const a = shifted(boxA, moves[i])
+            const b = shifted(boxB, moves[j])
+            const depth = [0, 1, 2].map((k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]))
+            if (!depth.every((d) => d > 0.01)) continue
+            const k = depth.indexOf(Math.min(...depth))
+            const order = a.min[k] + a.max[k] - (b.min[k] + b.max[k])
+            const side = order > 0 || (order === 0 && moves[i][k] >= moves[j][k]) ? 1 : -1
+            const push = depth[k] / 2 + gap / 4
+            moves[i][k] += side * push
+            moves[j][k] -= side * push
+            pushed = true
+          }
+        }
+      }
+    }
+    if (!pushed) break
+  }
+
+  parts.forEach((panel, i) => offsets.set(panel.id, moves[i]))
   return offsets
 }
 
