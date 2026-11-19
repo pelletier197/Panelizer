@@ -62,6 +62,8 @@ carcass. Emits ordinary panels — no new concept in the data model.
 
 A slider that slides panels outward along their normals. Render-only, so the
 model is untouched. Makes assembly order readable and shows off a shared link.
+With cut joints (§13) it's also the only way to see a joint's pieces apart:
+cuts follow the overlap, so the solids must be worked out before exploding.
 
 ## 8. Overall dimensions readout
 
@@ -92,6 +94,23 @@ tool.
 The cutlist diagram already labels parts. A toggle that shows matching labels on
 the meshes makes the saw diagram map back onto the model.
 
+## 13. Cut joints
+
+Done: clicking a joint's marker in the viewport (or its line under Joints)
+opens the joint editor — a close-up of just those parts, each in its own
+colour, pulled apart or together — with one question: who keeps the wood
+where they overlap? One part (the other is notched: dado, groove, rabbet),
+half each (a half lap), or neither. Three parts meeting get a 3-way corner,
+one part running through and keeping a quarter. A cut is stored on the panel that loses wood and points at the panel
+doing the cutting, so it follows that panel as it moves (`lib/cuts.ts`,
+`lib/joints.ts`). Panels stay boxes everywhere else: the cutlist still sees
+the full rectangle. Still open:
+
+- **Grooves in the DXF.** Export each cut as a pocket (its own layer, depth
+  in the layer name) for a CNC.
+- **Depth control.** A dado is as deep as the shelf is sunk; a stopped dado or
+  a groove of its own depth needs a cut that isn't another panel's shape.
+
 ---
 
 ## Carried over from the refactor
@@ -112,6 +131,6 @@ falls back on bad settings. Still open:
   axis-aligned assumption in `bounds`, `snapping` and `nesting` simultaneously.
   The cost is the whole geometry layer; the benefit is a minority of designs.
 - **Joint-driven auto-sizing.** Settled deliberately: the size you draw is the
-  size you cut, and joints are only ever indicated as a referential overlap tint.
-  Auto-shortening a shelf to account for a dado would make the cutlist stop
+  size you cut. A joint is cut into the parts (§13), never by resizing them:
+  auto-shortening a shelf to account for a dado would make the cutlist stop
   matching the model.

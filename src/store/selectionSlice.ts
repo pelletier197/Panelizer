@@ -36,6 +36,10 @@ export interface SelectionSlice {
    *  Transient UI state — never part of the design. */
   rotatePreview: Panel[]
   setRotatePreview: (panels: Panel[]) => void
+  /** The panels of the joint open in the joint editor (two, or three for a
+   *  corner), or null when it's closed. Transient UI state. */
+  jointEditor: string[] | null
+  setJointEditor: (ids: string[] | null) => void
   /** The panel-editor field under the pointer, and the one in focus, so the
    *  viewport can light up what it changes: a size field's edge, or a position
    *  field's axis. The hovered one wins, so pointing at a field while typing in
@@ -75,6 +79,7 @@ export const selectionSlice: Slice<SelectionSlice> = (set, get) => {
     hoverIds: [],
     boxKeyHeld: false,
     rotatePreview: [],
+    jointEditor: null,
     fieldHover: null,
     fieldFocus: null,
     suppressSelect: false,
@@ -89,6 +94,8 @@ export const selectionSlice: Slice<SelectionSlice> = (set, get) => {
     setRotatePreview: (rotatePreview) => {
       if (rotatePreview.length > 0 || get().rotatePreview.length > 0) set({ rotatePreview })
     },
+
+    setJointEditor: (jointEditor) => set({ jointEditor }),
 
     setBoxKeyHeld: (boxKeyHeld) => {
       if (get().boxKeyHeld !== boxKeyHeld) set({ boxKeyHeld })

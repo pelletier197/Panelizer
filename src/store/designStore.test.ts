@@ -351,3 +351,29 @@ describe('grain from older files', () => {
     expect(byId('old').grain).toBe('width')
   })
 })
+
+describe('cut joints', () => {
+  beforeEach(() => {
+    useDesignStore.setState({
+      panels: [panel({ id: 'side', cuts: [{ by: 'shelf' }] }), panel({ id: 'shelf' }), panel({ id: 'back' })],
+    })
+  })
+
+  it('deleting the panel that cut a joint takes the cut with it, and undo brings both back', () => {
+    store().removePanels(['shelf'])
+    expect(byId('side').cuts).toBeUndefined()
+    store().undo()
+    expect(byId('side').cuts).toEqual([{ by: 'shelf' }])
+  })
+
+  it('copying both panels of a joint copies the joint between the copies', () => {
+    store().duplicatePanels(['side', 'shelf'])
+    const [sideCopy, shelfCopy] = store().panels.slice(3)
+    expect(sideCopy.cuts).toEqual([{ by: shelfCopy.id }])
+  })
+
+  it('copying only the cut panel keeps its cut by the original', () => {
+    store().duplicatePanels(['side'])
+    expect(store().panels[3].cuts).toEqual([{ by: 'shelf' }])
+  })
+})

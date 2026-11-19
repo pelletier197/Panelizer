@@ -42,3 +42,10 @@ const AXIS_FIELD: Record<Axis, [Dimension, Dimension, Dimension]> = {
 export function axisField(normal: Axis, axis: 0 | 1 | 2): Dimension {
   return AXIS_FIELD[normal][axis]
 }
+
+/** World direction names for each axis: [the − side, the + side]. */
+export const SIDE_NAMES = [
+  ['left', 'right'],
+  ['bottom', 'top'],
+  ['back', 'front'],
+] as const

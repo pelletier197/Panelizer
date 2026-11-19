@@ -1,4 +1,4 @@
-import type { Panel } from '../types/panel'
+import type { Cut, Panel } from '../types/panel'
 import { defaultGrain } from '../types/panel'
 import type { Material } from './materials'
 import type { Stock } from './stock'
@@ -100,6 +100,14 @@ export function parse(json: string): Design {
     if (!isCornerRadii(p.corners)) delete panel.corners
     // Only a real "set by hand" survives; anything else means automatic.
     if (p.grainSet !== true) delete panel.grainSet
+    // Cuts are optional too: keep the readable ones (which panel cuts it, and
+    // for a lap a real axis and side); a cut by a panel that isn't in the file
+    // just does nothing.
+    const cuts = (Array.isArray(p.cuts) ? p.cuts : [])
+      .filter(isCut)
+      .map(({ by, half }): Cut => (half ? { by, half: { axis: half.axis, side: half.side } } : { by }))
+    if (cuts.length > 0) panel.cuts = cuts
+    else delete panel.cuts
     return panel
   })
 
@@ -126,6 +134,13 @@ const nonNegativeOr = (v: unknown, fallback: number) => (isFiniteNumber(v) && v 
 
 const isCornerRadii = (v: unknown): v is [number, number, number, number] =>
   Array.isArray(v) && v.length === 4 && v.every((r) => isFiniteNumber(r) && r >= 0)
+
+const isCut = (v: unknown): v is Cut => {
+  if (typeof v !== 'object' || v === null) return false
+  const { by, half } = v as Partial<Cut>
+  if (typeof by !== 'string' || !by) return false
+  return half === undefined || ([0, 1, 2].includes(half?.axis as number) && (half?.side === 1 || half?.side === -1))
+}
 
 /** Whether a stored panel has the geometry the viewport and nesting rely on. */
 function isUsablePanel(p: Partial<Panel> | null): p is Panel {
