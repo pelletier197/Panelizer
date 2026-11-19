@@ -506,13 +506,27 @@ function CloseUp({
         panel: p,
         solid: localSolid(p, clipped.length > 0 ? clipped : undefined),
         offset: offsets.get(p.id) ?? ([0, 0, 0] as Vec3),
+        drawn: clipped,
       }
     })
     // What the camera fits: the joint itself with a little wood around it
-    // when together, out to the pulled-apart pieces when apart.
+    // when together; when apart, every drawn piece where it's been moved to,
+    // out to its farthest corner.
     const half = Math.hypot(...[0, 1, 2].map((k) => joint.max[k] - joint.min[k])) / 2
     const together = half * 1.6 + 10
-    const apart = together + Math.max(0, ...pieces.map((p) => Math.hypot(...p.offset)))
+    const farthest = Math.max(
+      0,
+      ...pieces.flatMap(({ drawn, offset }) =>
+        drawn.map((b) =>
+          Math.hypot(
+            ...[0, 1, 2].map((k) =>
+              Math.max(Math.abs(b.min[k] + offset[k] - centre[k]), Math.abs(b.max[k] + offset[k] - centre[k])),
+            ),
+          ),
+        ),
+      ),
+    )
+    const apart = Math.max(together, farthest * 1.05)
     return { centre, joint, together, apart, pieces }
   }, [parts, all])
 
