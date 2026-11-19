@@ -7,6 +7,9 @@ export type FieldHighlight =
   | { kind: 'size'; field: 'length' | 'width' | 'thickness' }
   | { kind: 'position'; axis: 0 | 1 | 2 }
   | { kind: 'corner'; index: 0 | 1 | 2 | 3 }
+  /** One size of the overall readout: the whole piece's (or the selection's)
+   *  extent along a world axis. */
+  | { kind: 'extent'; axis: 0 | 1 | 2 }
 
 /** How a box-select combines with the existing selection. */
 export type BoxSelectOp = 'add' | 'remove' | 'replace'

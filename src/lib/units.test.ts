@@ -14,11 +14,11 @@ import {
 } from './units'
 
 /**
- * Characterization tests: these pin the CURRENT behaviour of the measurement
- * layer so the planned refactor (splitting `evaluateMeasurement` into
- * tokenize/fold helpers, extracting `reduceFraction`) can be proven not to
- * change a single result. Where behaviour looks quirky it is still asserted —
- * the point is to freeze it, not to judge it.
+ * Characterization tests: these pin the behaviour of the measurement layer, so
+ * a rewrite (as the field calculator's move to a real parser was) can be
+ * proven not to change a single result. Where behaviour looks quirky it is
+ * still asserted — the point is to freeze it, not to judge it. New field-math
+ * cases go in the table under `evaluateMeasurement — the table`.
  */
 
 const IN = 25.4
@@ -197,6 +197,86 @@ describe('evaluateMeasurement', () => {
     expect(evalMm('30 + abc')).toBeNull()
     expect(evalMm('30 * 0 / 0')).toBeNull()
     expect(evalMm('30 +')).toBeNull()
+  })
+})
+
+describe('evaluateMeasurement — the table', () => {
+  // Every case in one place: [typed, current value (mm), box unit, expected
+  // value in the box's unit, or null for rejected]. A field-math bug gets a
+  // row here, so it can't come back.
+  const cases: [string, number, 'mm' | 'cm' | 'inch', number | null][] = [
+    // Divide written several ways (the 3.5 / 2 report).
+    ['3.5 / 2', 0, 'inch', 1.75],
+    ['3.5/2', 0, 'inch', 1.75],
+    ['3 1/2 / 2', 0, 'inch', 1.75],
+    ['3 1/2/2', 0, 'inch', 1.75],
+    ['(3 1/2) / 2', 0, 'inch', 1.75],
+    ['(3 1/2)/2', 0, 'inch', 1.75],
+    ['7/2', 0, 'inch', 3.5],
+    ['3/4.5', 0, 'mm', 3 / 4.5],
+    // Parentheses.
+    ['(30 + 10) / 2', 0, 'mm', 20],
+    ['2 * (3 + 4)', 0, 'mm', 14],
+    ['((1 + 1) * (2 + 2))', 0, 'mm', 8],
+    ['-(3 + 4)', 0, 'mm', -7],
+    ['(23 3/4 - 1/2) / 2', 0, 'inch', 11.625],
+    ['/(1 + 1)', 100, 'mm', 50],
+    // Precedence and chains.
+    ['2+3*4', 0, 'mm', 14],
+    ['25 5/8-3*1/2', 0, 'inch', 24.125],
+    ['600 / 2 / 3', 0, 'mm', 100],
+    ['600/2/3', 0, 'mm', 100],
+    ['10 - 2 - 3', 0, 'mm', 5],
+    // Relative to the current value; a leading minus stays a negative number.
+    ['+3', 100, 'mm', 103],
+    ['*2', 100, 'mm', 200],
+    ['/2', 100, 'mm', 50],
+    ['/2+10', 100, 'mm', 60],
+    ['-3', 100, 'mm', -3],
+    ['-3 + 5', 100, 'mm', 2],
+    ['-23 3/4', 0, 'inch', -23.75],
+    // Units: a bare number is the box's unit, a typed one its own length.
+    ['10 + 1 in', 0, 'mm', 35.4],
+    ['1 in + 10', 0, 'mm', 35.4],
+    ['2 * 3 in', 0, 'mm', 152.4],
+    ['3 in / 2', 0, 'mm', 38.1],
+    ['1 ft - 1 in', 0, 'inch', 11],
+    [`5' 3"`, 0, 'inch', 63],
+    ["5' 3 1/2\"", 0, 'inch', 63.5],
+    ['1 m - 5 cm', 0, 'cm', 95],
+    ['2 IN', 0, 'mm', 50.8],
+    // Other ways of writing operators, and the glyphs the fields display.
+    ['3 × 4', 0, 'mm', 12],
+    ['12 ÷ 4', 0, 'mm', 3],
+    ['10 − 4', 0, 'mm', 6],
+    ['23³⁄₄ / 2', 0, 'inch', 11.875],
+    ['.5 + .25', 0, 'mm', 0.75],
+    // Rejected.
+    ['(3 + 4', 0, 'mm', null],
+    ['3 + 4)', 0, 'mm', null],
+    ['()', 0, 'mm', null],
+    ['3 4', 0, 'mm', null],
+    ['3 in * 2 in', 0, 'mm', null],
+    ['3 in / 2 in', 0, 'mm', null],
+    ['1/0', 0, 'mm', null],
+    ['5 / 0', 0, 'mm', null],
+    ['5 / (2 - 2)', 0, 'mm', null],
+    ['3 furlongs', 0, 'mm', null],
+    ['3 * ', 0, 'mm', null],
+    ['abc', 0, 'mm', null],
+  ]
+
+  it.each(cases)('%s (current %d, %s) → %s', (typed, current, unit, expected) => {
+    const result = evaluateMeasurement(typed, current, unit)
+    if (expected === null) expect(result).toBeNull()
+    else expect(fromMm(result!.mm, unit)).toBeCloseTo(expected, 8)
+  })
+
+  it("a single measurement adopts its unit; an expression keeps the box's", () => {
+    expect(evaluateMeasurement(`5' 3"`, 0, 'mm')?.explicitUnit).toBe('inch')
+    expect(evaluateMeasurement('-2 cm', 0, 'mm')?.explicitUnit).toBe('cm')
+    expect(evaluateMeasurement('(2 cm)', 0, 'mm')?.explicitUnit).toBeNull()
+    expect(evaluateMeasurement('2 cm + 1', 0, 'mm')?.explicitUnit).toBeNull()
   })
 })
 

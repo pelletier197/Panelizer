@@ -5,6 +5,8 @@ import { isAutoGrain } from '../../lib/panel'
 import { useDesignStore, type FieldHighlight } from '../../store/designStore'
 import { roundToUnitGrid, UNIT_SUFFIX } from '../../lib/units'
 import { rotatePanels } from '../../lib/rotate'
+import { mirroredCopies } from '../../lib/mirror'
+import { cantDistribute, distributePanels } from '../../lib/arrange'
 import { SIDE_NAMES, axisField } from '../../lib/geometry'
 import { CORNER_SIGNS } from '../../lib/rounding'
 import { MeasurementInput } from '../ui/MeasurementInput'
@@ -85,6 +87,26 @@ function RotateIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <path d="M21 4v4h-4" />
+    </svg>
+  )
+}
+
+/** Two halves either side of a dashed line. */
+function MirrorIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v3M12 10v4M12 18v3" />
+      <path d="M8 6 3 18h5z" />
+      <path d="M16 6l5 12h-5z" />
+    </svg>
+  )
+}
+
+/** Three bars with equal gaps. */
+function DistributeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 4v16M12 7v10M20 4v16" />
     </svg>
   )
 }
@@ -180,6 +202,8 @@ export function PropertiesPanel() {
   const removePanels = useDesignStore((s) => s.removePanels)
   const duplicatePanels = useDesignStore((s) => s.duplicatePanels)
   const rotateSelection = useDesignStore((s) => s.rotateSelection)
+  const mirrorSelection = useDesignStore((s) => s.mirrorSelection)
+  const distributeSelection = useDesignStore((s) => s.distributeSelection)
   const patchPanelsLive = useDesignStore((s) => s.patchPanelsLive)
   const commitPanelPatches = useDesignStore((s) => s.commitPanelPatches)
   const restorePanels = useDesignStore((s) => s.restorePanels)
@@ -190,18 +214,29 @@ export function PropertiesPanel() {
   // Shift flips a rotate button's direction, on click and in its preview.
   const shiftHeld = useDesignStore((s) => s.boxKeyHeld)
   const [hoveredTurn, setHoveredTurn] = useState<0 | 1 | 2 | null>(null)
+  const [hoveredMirror, setHoveredMirror] = useState<0 | 1 | 2 | null>(null)
+  const [hoveredSpace, setHoveredSpace] = useState<0 | 1 | 2 | null>(null)
 
   // While a rotate button is hovered, ghost the selection where that turn
   // would put it. Recomputed after a click too, so the ghost always shows the
   // *next* turn, and cleared when the pointer leaves or the panel unmounts.
   useEffect(() => {
+    if (hoveredSpace !== null && cantDistribute(selected, hoveredSpace) === null) {
+      const moved = new Map(distributePanels(selected, hoveredSpace).map((x) => [x.id, x.patch]))
+      setRotatePreview(selected.filter((p) => moved.has(p.id)).map((p) => ({ ...p, ...moved.get(p.id) })))
+      return
+    }
+    if (hoveredMirror !== null && selected.length > 0) {
+      setRotatePreview(mirroredCopies(selected, hoveredMirror, shiftHeld ? -1 : 1))
+      return
+    }
     if (hoveredTurn === null || selected.length === 0) {
       setRotatePreview([])
       return
     }
     const patches = new Map(rotatePanels(selected, hoveredTurn, shiftHeld ? -1 : 1).map((x) => [x.id, x.patch]))
     setRotatePreview(selected.map((p) => ({ ...p, ...patches.get(p.id) })))
-  }, [hoveredTurn, shiftHeld, selected, setRotatePreview])
+  }, [hoveredTurn, hoveredMirror, hoveredSpace, shiftHeld, selected, setRotatePreview])
   useEffect(() => () => setRotatePreview([]), [setRotatePreview])
 
   if (selected.length === 0) {
@@ -376,6 +411,62 @@ export function PropertiesPanel() {
           ))}
         </div>
       </div>
+
+      {/* A mirrored copy lands against the selection's far side (Shift: near
+          side), like the other half of a symmetric piece. */}
+      <div className="flex items-center gap-2 py-[3px]">
+        <span className="text-small w-20 shrink-0 text-ink-dim">Mirror</span>
+        <div className="flex flex-1 gap-1" role="group" aria-label="Mirrored copy">
+          {(['X', 'Y', 'Z'] as const).map((label, axis) => (
+            <Button
+              key={label}
+              size="sm"
+              className="flex-1"
+              title={`Add a mirrored copy across ${label} · Shift+click puts it on the other side`}
+              onClick={(e) => mirrorSelection(axis as 0 | 1 | 2, e.shiftKey ? -1 : 1)}
+              onMouseEnter={() => setHoveredMirror(axis as 0 | 1 | 2)}
+              onMouseLeave={() => setHoveredMirror(null)}
+            >
+              <MirrorIcon /> {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Same gap between every part along an axis, the outermost two
+          staying put. Only with three or more parts; an axis they're already
+          evenly spaced along is greyed out and says so. */}
+      {selected.length >= 3 && (
+        <div className="flex items-center gap-2 py-[3px]">
+          <span className="text-small w-20 shrink-0 text-ink-dim">Distribute</span>
+          <div className="flex flex-1 gap-1" role="group" aria-label="Distribute evenly">
+            {(['X', 'Y', 'Z'] as const).map((label, i) => {
+              const axis = i as 0 | 1 | 2
+              const why = cantDistribute(selected, axis)
+              return (
+                // The title sits on a wrapper: a disabled button shows none.
+                <span key={label} className="flex flex-1" title={why ?? `Same gap between every part along ${label} · the outermost two stay put`}>
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    disabled={why !== null}
+                    onClick={() => {
+                      // Once spaced, the button disables under the pointer
+                      // and no mouseleave comes to clear the ghost.
+                      setHoveredSpace(null)
+                      distributeSelection(axis)
+                    }}
+                    onMouseEnter={() => setHoveredSpace(axis)}
+                    onMouseLeave={() => setHoveredSpace(null)}
+                  >
+                    <DistributeIcon /> {label}
+                  </Button>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <FieldGroup title="Face" unit={UNIT_SUFFIX[unit]}>
         {measure('Length', length, 'length')}

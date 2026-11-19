@@ -19,10 +19,9 @@ shown as `Mixed`), duplicating a whole selection, `Ctrl+A` / `Ctrl+I` / `Esc`, a
 modeless box-select (`Shift+drag` adds, `Ctrl+Shift+drag` removes; left→right
 encloses, right→left touches, with a live preview). Still open:
 
-- **Batch mirror.** From §2; group-aware for free if it pivots on the
-  selection bounding box (rotation already does).
-- **Align and distribute.** Align faces on an axis, space evenly. Shares its math
-  with the array tool (§6).
+- **Align faces** on an axis. (Distribute is done: `lib/arrange.ts`, a
+  Distribute X / Y / Z row for three or more parts: equal edge-to-edge gaps,
+  or equal centre spacing where they don't fit side by side.)
 - **Select similar** (same material / same size / same part group).
 
 No data-model change anywhere in this section.
@@ -36,9 +35,9 @@ grain on the wood (`lib/rotate.ts`). Still open:
 
 - Re-run snapping after a turn so a rotated panel re-lands on its neighbours.
 
-**Mirror** belongs to the same family and is about fifteen lines: reflect the
-selection across a plane through its bounding-box centre (`x → 2c − x`). Model
-the left side of a cabinet, mirror it to the right.
+**Mirror** is done as mirrored copies (`lib/mirror.ts`): the Mirror X / Y / Z
+buttons add a reflected copy of the selection against its far side (Shift: near
+side), corners and lap halves flipped, joints kept between the copies.
 
 ## 3. Keyboard shortcuts
 
@@ -48,27 +47,24 @@ controls included), with `F` to frame, `H` / `Alt+H` to hide and show, and
 
 ## 4. Camera views and orthographic mode
 
-Navigation is free orbit only. Add Front / Side / Top / Iso presets and an
-orthographic toggle — an ortho top view makes alignment obvious without leaning
-on snapping. drei supplies most of the parts.
+The axis gizmo's dots already snap the camera to an axis. Named Front / Side /
+Top buttons and an orthographic toggle were weighed and judged not worth it.
 
 ## 6. Array and distribute
 
-Select a shelf, then "5 copies, evenly distributed between these two panels" or
-"spaced 320". Shelf pitch is the single most repetitive modelling task in a
-carcass. Emits ordinary panels — no new concept in the data model.
+Tried as "N copies, a gap apart" and dropped: the copy count read oddly, and
+Duplicate plus Space evenly (§1) covers shelf pitch.
 
 ## 7. Exploded view
 
-A slider that slides panels outward along their normals. Render-only, so the
-model is untouched. Makes assembly order readable and shows off a shared link.
-With cut joints (§13) it's also the only way to see a joint's pieces apart:
-cuts follow the overlap, so the solids must be worked out before exploding.
+Tried as a "pull apart" slider in the viewport and dropped: it didn't add much.
+The joint editor's close-up (§13) already shows a joint's pieces apart.
 
 ## 8. Overall dimensions readout
 
-A persistent corner chip with the design's total bounding box (W×H×D), derived
-from `panelBounds`. Answers "will it fit the alcove" without measuring anything.
+Done: a corner chip (`viewport/PieceReadout.tsx`) with the piece's — or the
+selection's — width × height × depth. Pointing at a size names it and draws it
+on the model in its axis colour.
 
 ## 9. Edge banding
 

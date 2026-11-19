@@ -376,4 +376,14 @@ describe('cut joints', () => {
     store().duplicatePanels(['side'])
     expect(store().panels[3].cuts).toEqual([{ by: 'shelf' }])
   })
+
+  it('a mirrored copy keeps its joints between the copies, in one undo step', () => {
+    useDesignStore.setState({ selectedIds: ['side', 'shelf'] })
+    store().mirrorSelection(0, 1)
+    const [sideCopy, shelfCopy] = store().panels.slice(3)
+    expect(sideCopy.cuts).toEqual([{ by: shelfCopy.id }])
+    expect(store().selectedIds).toEqual([sideCopy.id, shelfCopy.id])
+    store().undo()
+    expect(store().panels).toHaveLength(3)
+  })
 })

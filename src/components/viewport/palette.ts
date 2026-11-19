@@ -70,3 +70,8 @@ export function palette(): ViewportPalette {
   }
   return cached
 }
+
+/** X / Y / Z in the colours the move arrows and the axis gizmo use, so a
+ *  position field or an overall size points the same way the arrow you'd
+ *  drag does. */
+export const AXIS_COLORS = ['#ff3653', '#8adb00', '#2c8fff'] as const
