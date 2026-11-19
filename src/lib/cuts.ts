@@ -99,36 +99,50 @@ export function subtractBoxes(box: Bounds, holes: Bounds[]): Bounds[] {
  * panel is itself cut, so joints chain; a loop of such cuts (A into B into A)
  * is broken by treating the panel met again as its plain box. Panels without
  * cuts are a single box.
+ *
+ * A cut by a panel that doesn't touch this one takes nothing and isn't
+ * followed (copies keep cuts by their original's partners). And a shape
+ * worked out while a loop was still open — one that leaned on a panel's plain
+ * box as a stand-in — is only good for that one look-up, so it isn't kept:
+ * kept, it would leave a rail of a corner with no wood at all once the chain
+ * came back around to the post.
  */
 export function panelSolids(panels: Panel[]): Map<string, Bounds[]> {
   const byId = new Map(panels.map((p) => [p.id, p]))
   const done = new Map<string, Bounds[]>()
-  const busy = new Set<string>()
+  // Panels being worked out, by how deep in the chain they were started.
+  const open = new Map<string, number>()
 
-  const solid = (panel: Panel): Bounds[] => {
+  // The solid, and the shallowest open panel it leaned on (Infinity: none).
+  const solid = (panel: Panel, depth: number): { boxes: Bounds[]; leaned: number } => {
     const known = done.get(panel.id)
-    if (known) return known
+    if (known) return { boxes: known, leaned: Infinity }
     const box = panelBounds(panel)
-    if (busy.has(panel.id)) return [box]
-    busy.add(panel.id)
+    const started = open.get(panel.id)
+    if (started !== undefined) return { boxes: [box], leaned: started }
+    open.set(panel.id, depth)
+    let leaned = Infinity
     const removed = (panel.cuts ?? []).flatMap((cut) => {
       const by = byId.get(cut.by)
       if (!by || by.id === panel.id) return []
-      if (cut.half) {
-        const shared = intersectBounds(box, panelBounds(by))
-        return shared ? [halfOf(shared, cut.half)] : []
-      }
-      return solid(by)
-        .map((b) => intersectBounds(box, b))
-        .filter((b): b is Bounds => b !== null)
+      const shared = intersectBounds(box, panelBounds(by))
+      if (!shared) return []
+      if (cut.half) return [halfOf(shared, cut.half)]
+      const cutter = solid(by, depth + 1)
+      leaned = Math.min(leaned, cutter.leaned)
+      return cutter.boxes.map((b) => intersectBounds(box, b)).filter((b): b is Bounds => b !== null)
     })
-    busy.delete(panel.id)
-    const result = subtractBoxes(box, removed)
-    done.set(panel.id, result)
-    return result
+    open.delete(panel.id)
+    const boxes = subtractBoxes(box, removed)
+    // Leaning only on itself (or nothing) is a finished answer.
+    if (leaned >= depth) {
+      done.set(panel.id, boxes)
+      leaned = Infinity
+    }
+    return { boxes, leaned }
   }
 
-  panels.forEach(solid)
+  panels.forEach((p) => solid(p, 0))
   return done
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Panel } from '../types/panel'
-import type { Bounds } from './bounds'
+import { panelBounds, type Bounds } from './bounds'
 import { dropCutsBy, intersectBounds, panelSolids, subtractBoxes } from './cuts'
 import { jointMarkers } from './overlaps'
 import {
@@ -184,6 +184,43 @@ describe('loops and removal', () => {
     const [after] = dropCutsBy([a], new Set(['db']))
     expect(after.cuts).toEqual([{ by: 'dc' }])
     expect(dropCutsBy([after], new Set(['dc']))[0]).not.toHaveProperty('cuts')
+  })
+})
+
+describe('a corner whose cuts chain round through other parts', () => {
+  // A panel filling exactly [min, max] (thickness along Z).
+  const block = (id: string, min: [number, number, number], max: [number, number, number], cuts?: Panel['cuts']): Panel => {
+    const size = [0, 1, 2].map((k) => max[k] - min[k])
+    const position = [0, 1, 2].map((k) => (min[k] + max[k]) / 2) as [number, number, number]
+    const tryIt = (length: number, width: number) => panel({ id, normal: 'z', length, width, thickness: size[2], position, cuts })
+    const a = tryIt(size[0], size[1])
+    return panelBounds(a).max[0] - panelBounds(a).min[0] === size[0] ? a : tryIt(size[1], size[0])
+  }
+
+  it('leaves each rail its share, however the chain comes back to the post', () => {
+    // Post up Y, rails along X and Z, meeting in the 40 mm cube at the origin.
+    const post = block('kp', [0, -700, 0], [40, 40, 40])
+    const railX = block('kx', [0, 0, 0], [500, 40, 40])
+    const railZ = block('kz', [0, 0, 0], [40, 40, 500])
+    let parts = apply([post, railX, railZ], setThreeWay(post, [railX, railZ]))
+    // Two more parts, clear of the corner, that close a loop of whole-shape
+    // cuts: post ← a ← b ← rail X ← post.
+    const a = block('ka', [30, -300, 10], [200, -200, 30], [{ by: 'kb' }])
+    const b = block('kb', [150, -250, 10], [190, 20, 30], [{ by: 'kx' }])
+    parts = parts.map((p) => (p.id === 'kp' ? { ...p, cuts: [...(p.cuts ?? []), { by: 'ka' }] } : p))
+    // The post first, so the loop is met coming back round to it.
+    const solids = panelSolids([parts[0], a, b, ...parts.slice(1)])
+    const cube = box([0, 0, 0], [40, 40, 40])
+    const share = (id: string) => volumeIn(solids.get(id)!, cube) / 64000
+    expect(share('kp')).toBeCloseTo(0.25)
+    expect(share('kx')).toBeCloseTo(0.375)
+    expect(share('kz')).toBeCloseTo(0.375)
+  })
+
+  it("ignores a cut by a part that doesn't touch the panel", () => {
+    const lone = block('kl', [0, 0, 0], [10, 10, 10], [{ by: 'kf' }])
+    const far = block('kf', [100, 100, 100], [110, 110, 110], [{ by: 'kl' }])
+    expect(volume(panelSolids([lone, far]).get('kl')!)).toBeCloseTo(1000)
   })
 })
 
