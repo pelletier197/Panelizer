@@ -5,7 +5,7 @@ import type { Panel } from '../../types/panel'
 import { MM_TO_M } from '../../lib/geometry'
 import { frameBounds, unionBounds } from '../../lib/framing'
 import { useDesignStore } from '../../store/designStore'
-import { frameView, registerFramer } from './frameView'
+import { frameView, registerFramer, registerViewDirection } from './frameView'
 
 /** How long the camera glides to its framed view (ms). */
 const GLIDE_MS = 250
@@ -57,6 +57,17 @@ export function CameraFramer() {
       unregister()
     }
   }, [camera, controls, invalidate])
+
+  // Let other views (the joint close-up) open from the side being looked at.
+  useEffect(
+    () =>
+      registerViewDirection(() => {
+        if (!controls) return null
+        const dir = camera.position.clone().sub(controls.target).normalize()
+        return [dir.x, dir.y, dir.z]
+      }),
+    [camera, controls],
+  )
 
   const projectId = useDesignStore((s) => s.projectId)
   useEffect(() => {
