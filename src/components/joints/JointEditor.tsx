@@ -26,6 +26,7 @@ import { useEscapeToClose } from '../panels/cutlist/useCutlistModel'
 import { panelGeometry } from '../viewport/panelGeometry'
 import { HeadLight } from '../viewport/HeadLight'
 import { palette } from '../viewport/palette'
+import { viewDirection } from '../viewport/frameView'
 import { Button } from '../ui/Button'
 import { CONTROL } from '../ui/Field'
 import { cx } from '../ui/cx'
@@ -570,11 +571,15 @@ function CloseUp({
   )
 }
 
-/** Where the camera starts: up, right and in front of the joint, far enough
- *  back that everything within `radius` (mm) of it is in view. */
+/** Where the camera starts: on the side the main viewport is looking from,
+ *  so the close-up shows the joint the way it was just seen (or up, right and
+ *  in front when there's no main view), far enough back that everything
+ *  within `radius` (mm) of it is in view. */
 function cameraStart(radius: number): Vec3 {
   const d = (radius * 3.6) / 1000
-  return [d * 0.6, d * 0.5, d * 0.62]
+  const [x, y, z] = viewDirection() ?? [0.6, 0.5, 0.62]
+  const length = Math.hypot(x, y, z) || 1
+  return [(x / length) * d, (y / length) * d, (z / length) * d]
 }
 
 /** Eases the camera in or out along its line of sight until everything
